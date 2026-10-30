@@ -1,0 +1,20 @@
+data_dir = "/var/lib/vector"
+
+[sources.kubernetes_logs]
+type = "kubernetes_logs"
+
+[sinks.logs]
+type = "console"
+inputs = ["kubernetes_logs"]
+target = "stdout"
+
+[sinks.logs.encoding]
+codec = "json"
+
+[sources.internal_metrics]
+type = "internal_metrics"
+
+[sinks.metrics]
+type = "prometheus_exporter"
+inputs = ["internal_metrics"]
+address = "0.0.0.0:9598"

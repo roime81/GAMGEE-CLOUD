@@ -1,0 +1,17 @@
+authentik:
+  secret_key: ""
+  postgresql:
+    password: ""
+
+server:
+  ingress:
+    enabled: false
+
+worker:
+  enabled: true
+
+postgresql:
+  enabled: true
+
+redis:
+  enabled: true

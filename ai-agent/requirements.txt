@@ -1,0 +1,5 @@
+fastapi==0.115.12
+kubernetes==32.0.1
+litellm==1.100.4
+PyYAML==6.0.2
+uvicorn==0.34.2

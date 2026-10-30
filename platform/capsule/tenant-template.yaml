@@ -1,0 +1,25 @@
+apiVersion: capsule.clastix.io/v1beta2
+kind: Tenant
+metadata:
+  name: "${TENANT_NAME}"
+spec:
+  owners:
+    - kind: User
+      name: "${TENANT_OWNER_EMAIL}"
+  additionalNamespaces:
+    - "${TENANT_NAME}-production"
+    - "${TENANT_NAME}-staging"
+  resourceQuotas:
+    hard:
+      requests.cpu: "4"
+      requests.memory: 8Gi
+      limits.cpu: "8"
+      limits.memory: 16Gi
+      pods: "30"
+      services: "10"
+      persistentvolumeclaims: "5"
+  namespaceOptions:
+    additionalMetadata:
+      labels:
+        environment: multi-tenant
+        gamgee.cloud/tenant: "${TENANT_NAME}"
