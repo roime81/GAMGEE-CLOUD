@@ -1,0 +1,19 @@
+events:
+  - code: compute_instance_hours
+    name: Compute instance hours
+    description: Metered runtime for tenant workloads.
+    properties:
+      - name: tenant_id
+        type: string
+      - name: cpu_seconds
+        type: number
+      - name: memory_byte_seconds
+        type: number
+  - code: persistent_storage_gib_hours
+    name: Persistent storage GiB-hours
+    description: Metered persistent volume capacity over time.
+    properties:
+      - name: tenant_id
+        type: string
+      - name: gib_hours
+        type: number
