@@ -45,6 +45,7 @@ Each tenant gets a `<name>-production` and `<name>-staging` namespace with resou
 | Path | Purpose |
 | --- | --- |
 | `scripts/bootstrap.sh` | Installs K3s, Helm, Capsule, Traefik, and OpenCost on a Debian/Ubuntu host. |
+| `scripts/apply-network-policies.sh` | Applies default-deny network policies to a tenant's namespaces. |
 | `scripts/teardown.sh` | Removes K3s and every workload on the host (asks for confirmation). |
 | `ai-agent/` | FastAPI control plane that provisions tenants from natural language. |
 | `ai-factory/` | FastAPI AI Factory service, workspace UI, and integration worker. |
@@ -89,15 +90,12 @@ export TENANT_NAME=acme TENANT_OWNER_EMAIL=owner@example.com
 envsubst < platform/capsule/tenant-template.yaml | kubectl apply -f -
 ```
 
-Then apply the default-deny network policies to each of the tenant's namespaces:
+Then apply the default-deny network policies to the tenant's `-production` and `-staging` namespaces:
 
 ```bash
-for ns in acme-production acme-staging; do
-  TENANT_NAMESPACE=$ns envsubst < platform/capsule/network-policies.yaml | kubectl apply -f -
-done
+make deploy-core TENANT=acme
 ```
 
-> `make deploy-core` applies `network-policies.yaml` without substituting `${TENANT_NAMESPACE}`, so it will not work as-is; use the loop above.
 
 ### 3. Start the AI services
 
@@ -226,7 +224,12 @@ curl -N -X POST http://127.0.0.1:8090/v1/factory/chat \
 | `GET /v1/factory/tools` | Lists tools on every configured MCP server. |
 | `GET /healthz` | Liveness probe. |
 
-All `/v1` endpoints need `Authorization: Bearer $GAMGEE_API_TOKEN`; the tenant comes from `X-Gamgee-Tenant` (default `default`) and scopes retrieval and event subjects.
+All `/v1` endpoints need a bearer token, and the resolved tenant scopes retrieval and event subjects:
+
+- **OIDC JWT** (when `OIDC_ISSUER` and `OIDC_AUDIENCE` are set): the tenant is read from the token's claim and `X-Gamgee-Tenant` is ignored, so users cannot choose another tenant. Authentik works as the issuer; add a `tenant` claim through a property mapping.
+- **Shared service token** (`GAMGEE_API_TOKEN`): for trusted automation such as the integration worker. The tenant comes from `X-Gamgee-Tenant` (default `default`).
+
+Tools: in `auto` mode with MCP servers configured, the model may pick a tool for the request. Only tools that declare `annotations.readOnlyHint: true` are offered, and its choice must match a discovered tool; anything else is ignored. Tools that change state run only when a caller names them in `tool`.
 
 ### Configuration
 
@@ -234,6 +237,8 @@ All `/v1` endpoints need `Authorization: Bearer $GAMGEE_API_TOKEN`; the tenant c
 | --- | --- | --- |
 | `LLM_BASE_URL` / `LLM_MODEL` / `EMBEDDING_MODEL` | Ollama, `llama3.1:8b`, `nomic-embed-text` | OpenAI-compatible endpoint serving both chat and embeddings. Point it at vLLM or llama.cpp instead if it serves both models. |
 | `MCP_SERVERS` | empty | JSON `{"name": "http(s)://…/mcp"}`. This is the allowlist; tool calls to other servers are rejected. |
+| `OIDC_ISSUER` / `OIDC_AUDIENCE` | unset | Enables OIDC login: bearer JWTs are verified (signature, issuer, audience, expiry) against the issuer's JWKS. |
+| `OIDC_JWKS_URL` / `OIDC_TENANT_CLAIM` | `<issuer>/jwks/` / `tenant` | JWKS location and the claim holding the tenant name. |
 | `POSTGRES_CHECKPOINT_URL` | unset | Persists graph state in Postgres; without it, state is in memory. |
 | `NATS_URL` | unset | Enables the `event` route. |
 
@@ -241,10 +246,10 @@ Run the tests with `make test-factory`.
 
 ### Current scope and limitations
 
-- Tools are invoked explicitly (`tool` in the request); the model does not yet choose tools on its own, and only Streamable-HTTP MCP servers are supported (no stdio).
+- Model-selected tools are limited to read-only tools and a single call per request; chained multi-step tool use is not implemented. Only Streamable-HTTP MCP servers are supported (no stdio).
 - Retrieval is dense search with a BM25 re-rank over the top candidates, not a cross-encoder or a full sparse index.
 - Document ingestion is via the API (text); folder/file watchers and legacy adapters should publish to NATS (`gamgee.<tenant>.<subject>`), which the integration worker replays as graph runs.
-- Authentication is a single shared bearer token, and the tenant header is trusted. Put an OIDC-aware gateway (e.g. Authentik via Traefik forward-auth) in front and have it set `X-Gamgee-Tenant` before exposing this to multiple tenants.
+- Without OIDC configured, authentication is a single shared bearer token and the tenant header is trusted; configure OIDC before serving multiple tenants.
 - The Postgres checkpointer, NATS worker, and Ollama stack were not exercised end-to-end in CI; unit tests cover the API, RAG, MCP handshake, and routing with mocked backends.
 
 ## Development
@@ -261,10 +266,10 @@ Set up a virtual environment per service (`ai-agent/requirements.txt`, `ai-facto
 ## Security notes
 
 - Never commit `.env`; it is git-ignored. Replace every `replace-with-…` placeholder with a long random value.
-- `GAMGEE_API_TOKEN` is a single shared secret. Both services refuse requests when it is unset.
+- `GAMGEE_API_TOKEN` is a single shared secret. The control plane refuses requests when it is unset; the AI Factory refuses unless it or OIDC is configured.
 - Compose ports are bound to `127.0.0.1`. Expose services only through Traefik with TLS.
 - The control plane can create cluster-scoped Capsule tenants. Run it with a least-privilege ServiceAccount and keep it off the public internet.
-- The tenant isolation provided by Capsule and the network policies applies to Kubernetes workloads. The AI Factory's tenant separation is a retrieval filter on a shared Qdrant collection and relies on a trusted gateway setting `X-Gamgee-Tenant`.
+- The tenant isolation provided by Capsule and the network policies applies to Kubernetes workloads. The AI Factory's tenant separation is a retrieval filter on a shared Qdrant collection and relies on OIDC tenant claims (or, with the shared token, a trusted caller setting `X-Gamgee-Tenant`).
 
 ## Teardown
 

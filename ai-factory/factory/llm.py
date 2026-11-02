@@ -40,6 +40,15 @@ class LLMClient:
         except (httpx.HTTPError, KeyError, ValueError) as exc:
             raise LLMError("The embedding model is unavailable.") from exc
 
+    async def complete(self, messages: list[dict]) -> str:
+        payload = {"model": self._settings.llm_model, "messages": messages, "stream": False}
+        try:
+            response = await self._http.post("/chat/completions", json=payload)
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"] or ""
+        except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
+            raise LLMError("The language model is unavailable.") from exc
+
     async def stream_chat(self, messages: list[dict]) -> AsyncIterator[str]:
         payload = {"model": self._settings.llm_model, "messages": messages, "stream": True}
         try:

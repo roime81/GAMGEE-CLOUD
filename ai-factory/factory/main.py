@@ -1,6 +1,4 @@
-import hmac
 import json
-import re
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,6 +9,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from factory.auth import AuthError, Authenticator
 from factory.config import Settings
 from factory.events import EventBus
 from factory.llm import LLMClient, LLMError
@@ -19,7 +18,6 @@ from factory.orchestrator import build_graph, build_messages, run_graph
 from factory.rag import KnowledgeBase, VectorStoreError
 
 _STATIC = Path(__file__).parent / "static"
-_TENANT = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 _bearer = HTTPBearer(auto_error=False)
 
 
@@ -66,12 +64,14 @@ def create_app(
     kb: KnowledgeBase | None = None,
     mcp: MCPGateway | None = None,
     bus: EventBus | None = None,
+    authenticator: Authenticator | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
     llm = llm or LLMClient(settings)
     kb = kb or KnowledgeBase(settings, llm)
     mcp = mcp or MCPGateway(settings)
     bus = bus or EventBus(settings)
+    authenticator = authenticator or Authenticator(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -83,7 +83,7 @@ def create_app(
             checkpointer_cm = AsyncPostgresSaver.from_conn_string(settings.postgres_checkpoint_url)
             checkpointer = await checkpointer_cm.__aenter__()
             await checkpointer.setup()
-        app.state.graph = build_graph(kb, mcp, bus, checkpointer)
+        app.state.graph = build_graph(kb, mcp, bus, llm, checkpointer)
         try:
             yield
         finally:
@@ -94,26 +94,18 @@ def create_app(
 
     app = FastAPI(title="Gamgee Cloud AI Factory", version="1.0.0", lifespan=lifespan)
 
-    def require_api_token(
+    # Sync dependency: FastAPI runs it in a worker thread, so JWKS fetches do not block the loop.
+    def caller_tenant(
         credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    ) -> None:
-        if not settings.api_token:
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "The AI Factory is not configured.")
-        if credentials is None or not hmac.compare_digest(
-            credentials.credentials, settings.api_token
-        ):
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED,
-                "A valid bearer token is required.",
-                headers={"WWW-Authenticate": "Bearer"},
+        x_gamgee_tenant: str = Header(default="default"),
+    ) -> str:
+        try:
+            return authenticator.authenticate(
+                credentials.credentials if credentials else None, x_gamgee_tenant
             )
-
-    def tenant_header(x_gamgee_tenant: str = Header(default="default")) -> str:
-        if not _TENANT.fullmatch(x_gamgee_tenant):
-            raise HTTPException(422, "X-Gamgee-Tenant must be a lowercase DNS label.")
-        return x_gamgee_tenant
-
-    auth = [Depends(require_api_token)]
+        except AuthError as exc:
+            headers = {"WWW-Authenticate": "Bearer"} if exc.status == 401 else None
+            raise HTTPException(exc.status, exc.detail, headers=headers) from None
 
     @app.get("/", include_in_schema=False)
     def workspace() -> FileResponse:
@@ -123,16 +115,16 @@ def create_app(
     def health_check() -> dict:
         return {"status": "healthy", "service": "gamgee-ai-factory"}
 
-    @app.post("/v1/factory/ingest", dependencies=auth)
-    async def ingest(request: IngestRequest, tenant: str = Depends(tenant_header)) -> dict:
+    @app.post("/v1/factory/ingest")
+    async def ingest(request: IngestRequest, tenant: str = Depends(caller_tenant)) -> dict:
         try:
             count = await kb.ingest(tenant, request.source, request.text)
         except (VectorStoreError, LLMError) as exc:
             raise HTTPException(503, str(exc)) from exc
         return {"status": "success", "source": request.source, "chunks": count}
 
-    @app.get("/v1/factory/tools", dependencies=auth)
-    async def list_tools() -> dict:
+    @app.get("/v1/factory/tools")
+    async def list_tools(_: str = Depends(caller_tenant)) -> dict:
         tools = {}
         for server in mcp.servers:
             try:
@@ -141,8 +133,8 @@ def create_app(
                 tools[server] = {"error": str(exc)}
         return {"servers": tools}
 
-    @app.post("/v1/factory/chat", dependencies=auth)
-    async def chat(request: ChatRequest, tenant: str = Depends(tenant_header)) -> StreamingResponse:
+    @app.post("/v1/factory/chat")
+    async def chat(request: ChatRequest, tenant: str = Depends(caller_tenant)) -> StreamingResponse:
         if request.mode == "tool" and request.tool is None:
             raise HTTPException(422, "mode 'tool' requires a tool call.")
         if request.tool is not None and request.tool.server not in settings.mcp_servers:

@@ -15,6 +15,10 @@ class Settings:
     postgres_checkpoint_url: str | None
     mcp_servers: dict[str, str]
     request_timeout: float
+    oidc_issuer: str | None = None
+    oidc_audience: str | None = None
+    oidc_jwks_url: str | None = None
+    oidc_tenant_claim: str = "tenant"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -29,6 +33,10 @@ class Settings:
             postgres_checkpoint_url=os.getenv("POSTGRES_CHECKPOINT_URL"),
             mcp_servers=_parse_mcp_servers(os.getenv("MCP_SERVERS", "")),
             request_timeout=float(os.getenv("FACTORY_REQUEST_TIMEOUT", "120")),
+            oidc_issuer=os.getenv("OIDC_ISSUER") or None,
+            oidc_audience=os.getenv("OIDC_AUDIENCE") or None,
+            oidc_jwks_url=os.getenv("OIDC_JWKS_URL") or None,
+            oidc_tenant_claim=os.getenv("OIDC_TENANT_CLAIM", "tenant"),
         )
 
 

@@ -1,12 +1,14 @@
 .PHONY: all bootstrap deploy-core run-agent test test-factory factory-up factory-down clean
 
-all: bootstrap deploy-core
+all: bootstrap
 
 bootstrap:
 	@bash scripts/bootstrap.sh
 
+# Usage: make deploy-core TENANT=acme
 deploy-core:
-	@kubectl apply -f platform/capsule/network-policies.yaml
+	@test -n "$(TENANT)" || { echo "Usage: make deploy-core TENANT=<tenant-name>" >&2; exit 2; }
+	@bash scripts/apply-network-policies.sh $(TENANT)
 
 run-agent:
 	@cd ai-agent && uvicorn app.main:app --host 127.0.0.1 --port 8080

@@ -6,8 +6,9 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from factory.events import EventBus, EventBusError
-from factory.llm import LLMError
+from factory.llm import LLMClient, LLMError
 from factory.mcp import MCPError, MCPGateway
+from factory.planner import plan_tool
 from factory.rag import KnowledgeBase, VectorStoreError
 
 Mode = Literal["auto", "chat", "knowledge", "tool", "event"]
@@ -31,20 +32,28 @@ class FactoryState(TypedDict, total=False):
     notes: Annotated[list[str], operator.add]
 
 
-def route_request(state: FactoryState) -> str:
+def route_request(state: FactoryState, has_tools: bool = False) -> str:
     mode = state.get("mode", "auto")
     if mode == "auto":
         if state.get("tool"):
             return "tool"
         if state.get("event_subject"):
             return "event"
-        return "knowledge"
+        return "plan" if has_tools else "knowledge"
     return mode
 
 
-def build_graph(kb: KnowledgeBase, mcp: MCPGateway, bus: EventBus, checkpointer=None):
+def build_graph(
+    kb: KnowledgeBase, mcp: MCPGateway, bus: EventBus, llm: LLMClient, checkpointer=None
+):
     async def supervisor(state: FactoryState) -> dict:
-        return {"route": route_request(state)}
+        return {"route": route_request(state, has_tools=bool(mcp.servers))}
+
+    async def plan(state: FactoryState) -> dict:
+        choice = await plan_tool(llm, mcp, state["prompt"])
+        if choice is None:
+            return {"notes": ["No tool needed."]}
+        return {"tool": choice, "notes": [f"Model selected tool {choice['server']}/{choice['name']}."]}
 
     async def knowledge(state: FactoryState) -> dict:
         try:
@@ -90,6 +99,7 @@ def build_graph(kb: KnowledgeBase, mcp: MCPGateway, bus: EventBus, checkpointer=
 
     graph = StateGraph(FactoryState)
     graph.add_node("supervisor", supervisor)
+    graph.add_node("plan", plan)
     graph.add_node("knowledge", knowledge)
     graph.add_node("tool", tool)
     graph.add_node("event", event)
@@ -98,7 +108,10 @@ def build_graph(kb: KnowledgeBase, mcp: MCPGateway, bus: EventBus, checkpointer=
     graph.add_conditional_edges(
         "supervisor",
         lambda s: s["route"],
-        {"knowledge": "knowledge", "tool": "tool", "event": "event", "chat": "chat"},
+        {"plan": "plan", "knowledge": "knowledge", "tool": "tool", "event": "event", "chat": "chat"},
+    )
+    graph.add_conditional_edges(
+        "plan", lambda s: "tool" if s.get("tool") else "knowledge", {"tool": "tool", "knowledge": "knowledge"}
     )
     for node in ("knowledge", "tool", "event", "chat"):
         graph.add_edge(node, END)

@@ -12,6 +12,10 @@ services:
       POSTGRES_CHECKPOINT_URL: postgresql://factory:${FACTORY_POSTGRES_PASSWORD:?Set FACTORY_POSTGRES_PASSWORD in .env}@factory-postgres:5432/agent_state
       NATS_URL: nats://event-bus:4222
       MCP_SERVERS: ${MCP_SERVERS:-}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:-}
+      OIDC_TENANT_CLAIM: ${OIDC_TENANT_CLAIM:-tenant}
     ports:
       - "127.0.0.1:8090:8090"
     depends_on:
