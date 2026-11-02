@@ -25,7 +25,7 @@ Gamgee Cloud is a single-VM, multi-tenant cloud PaaS built on K3s, with two AI c
 ## Architecture
 
 ```
-                       Traefik (ingress, TLS, rate limit)
+                       Traffic (ingress, TLS, rate limit)
                                    │
         ┌──────────────────────────┴──────────────────────────┐
         │                                                     │
