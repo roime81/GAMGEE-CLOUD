@@ -1,4 +1,4 @@
-.PHONY: all bootstrap deploy-core run-agent test clean
+.PHONY: all bootstrap deploy-core run-agent test test-factory factory-up factory-down clean
 
 all: bootstrap deploy-core
 
@@ -13,6 +13,15 @@ run-agent:
 
 test:
 	@python -m unittest discover -s ai-agent/tests -v
+
+test-factory:
+	@cd ai-factory && python -m unittest discover -s tests -t . -v
+
+factory-up:
+	@docker compose -f docker-compose.yml -f docker-compose.ai-factory.yml up -d --build
+
+factory-down:
+	@docker compose -f docker-compose.yml -f docker-compose.ai-factory.yml down
 
 clean:
 	@bash scripts/teardown.sh

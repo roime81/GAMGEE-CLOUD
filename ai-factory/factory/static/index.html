@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gamgee AI Factory</title>
+<style>
+  :root { color-scheme: light dark; --fg:#1f2328; --bg:#fff; --muted:#656d76; --line:#d0d7de; --accent:#2563eb; --card:#f6f8fa; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#e6edf3; --bg:#0d1117; --muted:#8b949e; --line:#30363d; --card:#161b22; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.55 system-ui,sans-serif; color:var(--fg); background:var(--bg); min-height:100vh; display:flex; flex-direction:column; align-items:center; }
+  main { width:min(760px,92vw); padding:12vh 0 4rem; transition:padding .2s; }
+  main.active { padding-top:2rem; }
+  h1 { text-align:center; font-size:2rem; font-weight:600; margin:0 0 1.5rem; }
+  main.active h1 { font-size:1.1rem; text-align:left; }
+  form { display:flex; gap:.5rem; }
+  input[type=text], input[type=password], select { flex:1; font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:.8rem 1.2rem; }
+  input:focus, select:focus { outline:2px solid var(--accent); }
+  button { font:inherit; border:0; border-radius:999px; padding:.8rem 1.3rem; background:var(--accent); color:#fff; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .opts { display:flex; gap:.5rem; margin-top:.75rem; color:var(--muted); font-size:.85rem; align-items:center; flex-wrap:wrap; }
+  .opts select, .opts input { border-radius:8px; padding:.3rem .6rem; flex:none; font-size:.85rem; }
+  .steps { margin:1.5rem 0 .5rem; display:flex; flex-wrap:wrap; gap:.4rem; }
+  .chip { font-size:.75rem; padding:.15rem .6rem; border-radius:999px; background:var(--card); border:1px solid var(--line); color:var(--muted); }
+  #out { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1rem 1.25rem; display:none; word-wrap:break-word; }
+  #out.show { display:block; }
+  #out pre { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:.75rem; overflow:auto; }
+  #out code { font-family:ui-monospace,monospace; font-size:.9em; }
+  #out table { border-collapse:collapse; margin:.75rem 0; }
+  #out th, #out td { border:1px solid var(--line); padding:.35rem .7rem; }
+  #out p { margin:.5rem 0; }
+  .err { color:#cf222e; }
+  .src { color:var(--muted); font-size:.8rem; margin-top:.75rem; }
+</style>
+</head>
+<body>
+<main id="main">
+  <h1>Gamgee AI Factory</h1>
+  <form id="form">
+    <input id="prompt" type="text" placeholder="Ask anything about your private knowledge…" autocomplete="off" maxlength="8000" required autofocus>
+    <button id="send" type="submit">Ask</button>
+  </form>
+  <div class="opts">
+    <label>Mode <select id="mode"><option>auto</option><option>knowledge</option><option>chat</option><option>event</option></select></label>
+    <label>Tenant <input id="tenant" type="text" value="default" size="12"></label>
+    <label>Token <input id="token" type="password" size="12" placeholder="API token"></label>
+  </div>
+  <div class="steps" id="steps"></div>
+  <div id="out" aria-live="polite"></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+$("token").value = sessionStorage.getItem("gamgee_token") || "";
+$("tenant").value = sessionStorage.getItem("gamgee_tenant") || "default";
+let threadId = null;
+
+const esc = (s) => s.replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+// Escape first, then apply a small Markdown subset, so model output can never inject HTML.
+function render(md) {
+  const blocks = [];
+  let text = esc(md).replace(/```[^\n]*\n([\s\S]*?)(```|$)/g, (_, code) => {
+    blocks.push(`<pre><code>${code}</code></pre>`);
+    return `\u0000${blocks.length - 1}\u0000`;
+  });
+  const lines = text.split("\n"), out = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\|.*\|\s*$/.test(lines[i]) && /^\|[\s:|-]+\|\s*$/.test(lines[i + 1] || "")) {
+      const row = (l, t) => "<tr>" + l.trim().slice(1, -1).split("|").map((c) => `<${t}>${c.trim()}</${t}>`).join("") + "</tr>";
+      let html = "<table>" + row(lines[i], "th"); i += 2;
+      for (; i < lines.length && /^\|.*\|\s*$/.test(lines[i]); i++) html += row(lines[i], "td");
+      out.push(html + "</table>"); i--;
+    } else if (/^\s*[-*] /.test(lines[i])) {
+      let html = "<ul>";
+      for (; i < lines.length && /^\s*[-*] /.test(lines[i]); i++) html += `<li>${lines[i].replace(/^\s*[-*] /, "")}</li>`;
+      out.push(html + "</ul>"); i--;
+    } else if (lines[i].trim()) {
+      out.push(`<p>${lines[i]}</p>`);
+    }
+  }
+  return out.join("").replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\u0000(\d+)\u0000/g, (_, n) => blocks[+n]);
+}
+
+function chip(label) {
+  const el = document.createElement("span");
+  el.className = "chip"; el.textContent = label;
+  $("steps").appendChild(el);
+}
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  sessionStorage.setItem("gamgee_token", $("token").value);
+  sessionStorage.setItem("gamgee_tenant", $("tenant").value);
+  $("main").classList.add("active");
+  $("steps").textContent = "";
+  const out = $("out"); out.className = "show"; out.textContent = "";
+  $("send").disabled = true;
+  let answer = "", sources = [];
+  try {
+    const res = await fetch("/v1/factory/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${$("token").value}`, "X-Gamgee-Tenant": $("tenant").value },
+      body: JSON.stringify({ prompt: $("prompt").value, mode: $("mode").value, thread_id: threadId }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `Request failed (${res.status})`);
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) !== -1) {
+        const raw = buf.slice(0, idx); buf = buf.slice(idx + 2);
+        const ev = /^event: (.*)$/m.exec(raw)?.[1], data = JSON.parse(/^data: (.*)$/m.exec(raw)?.[1] || "{}");
+        if (ev === "thread") threadId = data.thread_id;
+        else if (ev === "step") chip(data.notes?.length ? `${data.node}: ${data.notes.join(" ")}` : data.node);
+        else if (ev === "sources") sources = data.sources;
+        else if (ev === "token") { answer += data.text; out.innerHTML = render(answer); }
+        else if (ev === "error") throw new Error(data.message);
+      }
+    }
+    if (sources.length) out.insertAdjacentHTML("beforeend", `<div class="src">Sources: ${sources.map(esc).join(", ")}</div>`);
+  } catch (err) {
+    out.insertAdjacentHTML("beforeend", `<p class="err">${esc(String(err.message || err))}</p>`);
+  } finally {
+    $("send").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
