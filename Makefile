@@ -12,7 +12,7 @@ run-agent:
 	@cd ai-agent && uvicorn app.main:app --host 127.0.0.1 --port 8080
 
 test:
-	@python -m unittest discover -s ai-agent/tests -v
+	@cd ai-agent && python -m unittest discover -s tests -v
 
 test-factory:
 	@cd ai-factory && python -m unittest discover -s tests -t . -v
