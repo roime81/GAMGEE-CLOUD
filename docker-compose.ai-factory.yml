@@ -1,0 +1,81 @@
+# AI Factory overlay. Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.ai-factory.yml up -d
+services:
+  ai-factory:
+    build: ./ai-factory
+    environment:
+      GAMGEE_API_TOKEN: ${GAMGEE_API_TOKEN:?Set GAMGEE_API_TOKEN in .env}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
+      LLM_MODEL: ${LLM_MODEL:-llama3.1:8b}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      VECTOR_STORE_URL: http://qdrant:6333
+      POSTGRES_CHECKPOINT_URL: postgresql://factory:${FACTORY_POSTGRES_PASSWORD:?Set FACTORY_POSTGRES_PASSWORD in .env}@factory-postgres:5432/agent_state
+      NATS_URL: nats://event-bus:4222
+      MCP_SERVERS: ${MCP_SERVERS:-}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:-}
+      OIDC_TENANT_CLAIM: ${OIDC_TENANT_CLAIM:-tenant}
+    ports:
+      - "127.0.0.1:8090:8090"
+    depends_on:
+      factory-postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      event-bus:
+        condition: service_started
+    restart: unless-stopped
+
+  integration-worker:
+    build: ./ai-factory
+    command: ["python", "-m", "factory.worker"]
+    environment:
+      GAMGEE_API_TOKEN: ${GAMGEE_API_TOKEN:?Set GAMGEE_API_TOKEN in .env}
+      NATS_URL: nats://event-bus:4222
+      ORCHESTRATOR_URL: http://ai-factory:8090
+    depends_on:
+      - ai-factory
+      - event-bus
+    restart: unless-stopped
+
+  event-bus:
+    image: nats:2.10-alpine
+    command: ["-js", "-sd", "/data"]
+    volumes:
+      - factory-nats:/data
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.7
+    volumes:
+      - factory-qdrant:/qdrant/storage
+    restart: unless-stopped
+
+  factory-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: agent_state
+      POSTGRES_USER: factory
+      POSTGRES_PASSWORD: ${FACTORY_POSTGRES_PASSWORD:?Set FACTORY_POSTGRES_PASSWORD in .env}
+    volumes:
+      - factory-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U factory -d agent_state"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Self-hosted inference. Add GPU access with a compose override if available.
+  ollama:
+    image: ollama/ollama:0.5.7
+    volumes:
+      - factory-ollama:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  factory-nats:
+  factory-qdrant:
+  factory-postgres:
+  factory-ollama:

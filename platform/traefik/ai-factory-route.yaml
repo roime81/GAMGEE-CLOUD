@@ -1,0 +1,33 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: gamgee-factory-ratelimit
+  namespace: default
+spec:
+  rateLimit:
+    average: 30
+    period: 1m
+    burst: 10
+---
+# Example only: replace the host, and point `ai-factory` at the Service that exposes port 8090.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gamgee-ai-factory
+  namespace: default
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`ai.example.com`)
+      kind: Rule
+      middlewares:
+        - name: gamgee-factory-ratelimit
+      services:
+        - name: ai-factory
+          port: 8090
+          # Do not buffer or cut off long-lived SSE token streams.
+          responseForwarding:
+            flushInterval: 1ms
+  tls:
+    certResolver: letsencrypt
