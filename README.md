@@ -25,7 +25,7 @@ Gamgee Cloud is a single-VM, multi-tenant cloud PaaS built on K3s, with two AI c
 ## Architecture
 
 ```
-<img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/a2f42e75-ae93-48c1-8d1c-b52bb33239f4" />
+<img width="1024" height="559" alt="image" src="https://github.com/roime81/GAMGEE-CLOUD/blob/main/Gemini_Generated_Image_qooln8qooln8qool.jpeg" />
 
 ```
 
