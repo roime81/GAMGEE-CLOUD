@@ -24,10 +24,9 @@ Gamgee Cloud is a single-VM, multi-tenant cloud PaaS built on K3s, with two AI c
 
 ## Architecture
 
-```
 ![Architecture Diagram](Gemini_Generated_Image_qooln8qooln8qool.jpeg)
 
-```
+
 
 Each tenant gets a `<name>-production` and `<name>-staging` namespace with resource quotas, and is isolated from other tenants by network policy.
 
