@@ -25,17 +25,8 @@ Gamgee Cloud is a single-VM, multi-tenant cloud PaaS built on K3s, with two AI c
 ## Architecture
 
 ```
-                       Traffic (ingress, TLS, rate limit)
-                                   │
-        ┌──────────────────────────┴──────────────────────────┐
-        │                                                     │
-  AI control plane (ai-agent)                         AI Factory (ai-factory)
-  POST /v1/cloud/execute                              RAG · LangGraph · MCP · NATS
-        │ creates                                              │ self-hosted models
-        ▼                                                      ▼
-  Capsule Tenant ─► namespaces + quotas + network policies   Ollama / Qdrant / Postgres
-        │
-  K3s (single VM) · OpenCost (cost) · Authentik / Lago / Vector (optional, see below)
+<img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/a2f42e75-ae93-48c1-8d1c-b52bb33239f4" />
+
 ```
 
 Each tenant gets a `<name>-production` and `<name>-staging` namespace with resource quotas, and is isolated from other tenants by network policy.
