@@ -10,6 +10,7 @@ resources:
   minimum_ram_gib: 4
   minimum_disk_gib: 40
 required_tools: [ansible-playbook, bash]
+artifacts: [scripts/bootstrap.sh]
 steps:
   - executor: ansible-playbook
     playbook: automation/ansible/core-cloud.yml
