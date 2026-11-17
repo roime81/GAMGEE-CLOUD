@@ -42,7 +42,15 @@ def _run_playbook(playbook: str, timeout: int) -> tuple[int, str]:
     return result.returncode, (result.stdout or "")[-16000:]
 
 
+_execution_lock = __import__("threading").Lock()
+
+
 def execute_job(job_id: str, plan: dict[str, Any]) -> None:
+    with _execution_lock:
+        _execute_job_serial(job_id, plan)
+
+
+def _execute_job_serial(job_id: str, plan: dict[str, Any]) -> None:
     store = JobStore(settings.database_path)
     details = {"profiles": [], "current_profile": None}
     store.update(job_id, status="running", details=details, append_log="GAMGEE Control Tower execution started.\n")
