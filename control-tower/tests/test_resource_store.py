@@ -104,6 +104,16 @@ class ResourceStoreTests(unittest.TestCase):
         self.assertEqual(self.store.get_operation(operation_id)["status"], "succeeded")
         self.assertEqual(self.store.list(), [])
 
+    def test_repeated_delete_without_key_does_not_create_new_generation(self):
+        resource, _, _ = self.submit()
+        first, operation1, replayed1 = self.store.delete(resource["id"], workspace="acme")
+        second, operation2, replayed2 = self.store.delete(resource["id"], workspace="acme")
+        self.assertFalse(replayed1)
+        self.assertTrue(replayed2)
+        self.assertEqual(first["generation"], 2)
+        self.assertEqual(second["generation"], 2)
+        self.assertEqual(operation1, operation2)
+
     def test_delete_idempotency_key_is_scoped_to_workspace_and_payload(self):
         resource, _, _ = self.submit()
         _, op1, replay1 = self.store.delete(resource["id"], workspace="acme", idempotency_key="delete-1")

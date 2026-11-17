@@ -367,10 +367,12 @@ class ResourceStore:
                 connection.commit()
                 return None, None, False
             current = self._resource(row)
-            if current and current["phase"] == "deleted":
+            if current and (
+                current["phase"] == "deleted" or current["desired"].get("deleted")
+            ):
                 operation = connection.execute(
-                    "SELECT id FROM resource_operations WHERE resource_id=? ORDER BY generation DESC LIMIT 1",
-                    (resource_id,),
+                    "SELECT id FROM resource_operations WHERE resource_id=? AND generation=?",
+                    (resource_id, row["generation"]),
                 ).fetchone()
                 operation_id = operation["id"] if operation else None
                 if idempotency_key and operation_id:
