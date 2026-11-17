@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GAMGEE Cloud</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f5f7fa;font-synthesis:none;text-rendering:optimizeLegibility}
+*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{border:0;border-radius:10px;background:#2457d6;color:#fff;padding:11px 16px;font-weight:650;cursor:pointer}button:hover{background:#1847bd}button:disabled{opacity:.45;cursor:not-allowed}button.ghost{background:#eef2f8;color:#25324a}button.danger{background:#fff0ee;color:#a02b22}.shell{display:grid;grid-template-columns:224px 1fr;min-height:100vh}.side{background:#fff;border-right:1px solid #e5eaf1;padding:24px 16px;display:flex;flex-direction:column;gap:24px}.brand{display:flex;align-items:center;gap:10px;font-weight:850;font-size:18px;letter-spacing:.03em;padding:0 8px}.mark{width:32px;height:32px;border-radius:10px;background:#173b8e;color:#fff;display:grid;place-items:center;font-size:17px}.side nav{display:grid;gap:6px}.side nav a{color:#57647a;text-decoration:none;padding:10px 12px;border-radius:9px;font-size:14px}.side nav a:hover,.side nav a.active{background:#eef3ff;color:#214eae;font-weight:650}.side-note{margin-top:auto;padding:14px;border:1px solid #e8edf4;border-radius:12px;color:#69758a;font-size:12px;line-height:1.55}.main{min-width:0;padding:28px clamp(18px,4vw,54px) 50px;max-width:1500px;width:100%;margin:0 auto}.top{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:24px}.eyebrow{color:#64718a;font-size:11px;text-transform:uppercase;letter-spacing:.13em;font-weight:750}.top h1{margin:4px 0 0;font-size:25px}.auth{display:flex;gap:8px;align-items:center}.auth input{width:235px}.field,input,select{border:1px solid #dbe2ec;background:#fff;border-radius:9px;padding:10px 12px;color:#202b3e;min-width:0}.field:focus,input:focus,select:focus{outline:2px solid #cfdbff;border-color:#7898f4}.hero{background:#fff;border:1px solid #e4e9f1;border-radius:18px;padding:30px;display:flex;align-items:center;justify-content:space-between;gap:24px;box-shadow:0 8px 28px #12264a08}.hero h2{font-size:28px;line-height:1.15;margin:8px 0 10px;max-width:600px}.hero p{color:#68758a;max-width:650px;line-height:1.6;margin:0}.hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}.hero-art{width:180px;height:150px;flex:0 0 180px;background:linear-gradient(145deg,#eff4ff,#f9fbff);border:1px solid #e1e9fc;border-radius:18px;display:grid;place-items:center;color:#3158b4;font-size:58px}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0 28px}.metric,.panel{background:#fff;border:1px solid #e4e9f1;border-radius:15px;padding:18px}.metric .value{font-size:25px;font-weight:780;margin-top:8px}.metric .desc{font-size:12px;color:#728097;margin-top:4px}.section{margin:30px 0;scroll-margin-top:22px}.section-head{display:flex;justify-content:space-between;align-items:end;gap:16px;margin-bottom:14px}.section-head h2{font-size:19px;margin:4px 0 0}.section-head p{color:#718097;font-size:13px;margin:5px 0 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.panel h3{margin:0 0 8px;font-size:15px}.muted{color:#6f7b90;font-size:13px;line-height:1.55}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.form-field{display:grid;gap:6px;font-size:12px;color:#67748a;font-weight:650}.form-field.full{grid-column:1/-1}.form-actions{display:flex;gap:9px;margin-top:14px;align-items:center}.help{font-size:11px;color:#8290a5;margin-top:4px}.status{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:650;color:#63718a}.dot{width:7px;height:7px;border-radius:50%;background:#99a4b5}.dot.ok{background:#23956a}.dot.warn{background:#d69b27}.table{width:100%;border-collapse:collapse;font-size:13px}.table th{text-align:left;color:#8190a5;font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;padding:10px 8px;border-bottom:1px solid #edf0f5}.table td{padding:12px 8px;border-bottom:1px solid #f0f2f6;vertical-align:middle}.table tr:last-child td{border-bottom:0}.actions{display:flex;gap:6px;flex-wrap:wrap}.actions button{padding:7px 9px;font-size:11px}.code{background:#111a2a;color:#e4eafa;border-radius:10px;padding:13px 15px;overflow:auto;font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}.message{display:none;border-radius:10px;background:#edf4ff;color:#284b96;padding:11px 13px;margin:14px 0;font-size:13px;white-space:pre-wrap}.message.error{background:#fff0ef;color:#a02b22}.profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.profile{border:1px solid #e5eaf1;border-radius:11px;padding:12px;display:flex;gap:10px;align-items:flex-start}.profile input{margin-top:3px}.profile strong{display:block;font-size:13px}.profile small{display:block;color:#718097;line-height:1.5;margin-top:3px}.pre{max-height:320px;overflow:auto;font:11px/1.5 ui-monospace,monospace;background:#f5f7fb;border:1px solid #e5eaf1;border-radius:10px;padding:12px;white-space:pre-wrap;word-break:break-word}.footer{font-size:11px;color:#8a96a8;margin-top:32px}.hidden{display:none!important}.tag{background:#f0f4fa;padding:4px 8px;border-radius:20px;font-size:11px;color:#596980}.job{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #eef1f5;font-size:12px}.job:last-child{border:0}details summary{cursor:pointer;font-size:13px;font-weight:700;color:#41506a}details[open] summary{margin-bottom:14px}
+@media(max-width:950px){.shell{grid-template-columns:1fr}.side{padding:12px 16px;border-right:0;border-bottom:1px solid #e5eaf1;flex-direction:row;align-items:center;justify-content:space-between}.side nav{display:flex;overflow:auto}.side-note{display:none}.main{padding-top:20px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-art{display:none}}
+@media(max-width:620px){.top{align-items:flex-start;flex-direction:column}.auth{width:100%}.auth input{flex:1;width:100%}.grid,.form-grid,.profile-grid{grid-template-columns:1fr}.form-field.full{grid-column:auto}.hero{padding:22px}.hero h2{font-size:24px}.metrics{gap:8px}.metric{padding:13px}.metric .value{font-size:20px}.side nav a{padding:8px;font-size:12px}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="side">
+  <div class="brand"><span class="mark">G</span> GAMGEE</div>
+  <nav>
+    <a class="active" href="#overview">Overview</a>
+    <a href="#workspaces">Workspaces</a>
+    <a href="#apps">Applications</a>
+    <a href="#functions">Functions</a>
+    <a href="#compute">Compute</a>
+    <a href="#advanced">Advanced</a>
+    <a href="#activity">Activity</a>
+  </nav>
+  <div class="side-note"><strong>One cloud. One control surface.</strong><br>GAMGEE keeps the infrastructure underneath the experience. Start on one machine; add compute when you need it.</div>
+</aside>
+<main class="main">
+  <header class="top">
+    <div><div class="eyebrow">GAMGEE Cloud OS</div><h1 id="pageTitle">Your cloud at a glance</h1></div>
+    <div class="auth"><input id="token" type="password" autocomplete="off" placeholder="Control Tower access token" aria-label="Control Tower access token"><button id="connect">Connect</button><span class="status" id="connection"><i class="dot"></i>Offline</span></div>
+  </header>
+
+  <section class="hero" id="overview">
+    <div>
+      <div class="eyebrow">Start simple · Grow without redesign</div>
+      <h2>Your first cloud shouldn't need a cloud team.</h2>
+      <p>Install the GAMGEE foundation on this machine. Create isolated workspaces, launch applications or WebAssembly functions, and add compute nodes through one guided control surface.</p>
+      <div class="hero-actions"><button id="installCore">Build my cloud</button><button class="ghost" id="refresh">Refresh status</button></div>
+      <div class="help" id="installHelp">GAMGEE selects the richest local bundle that fits this machine. Core is the minimum; other capabilities are added only when capacity and prerequisites allow.</div><div class="help" id="cloudPlanSummary"></div>
+    </div>
+    <div class="hero-art" aria-hidden="true">⌘</div>
+  </section>
+
+  <div id="message" class="message" role="status"></div>
+  <section class="metrics">
+    <div class="metric"><div class="eyebrow">Cloud state</div><div class="value" id="cloudState">Not connected</div><div class="desc">Control plane and Kubernetes data plane</div></div>
+    <div class="metric"><div class="eyebrow">Compute nodes</div><div class="value" id="nodeCount">—</div><div class="desc" id="nodeDesc">Connect to inspect capacity</div></div>
+    <div class="metric"><div class="eyebrow">Workspaces</div><div class="value" id="workspaceCount">—</div><div class="desc">Isolated team or project boundaries</div></div>
+    <div class="metric"><div class="eyebrow">Recent operations</div><div class="value" id="jobCount">—</div><div class="desc">Provisioning and install history</div></div>
+  </section>
+
+  <section class="section" id="workspaces">
+    <div class="section-head"><div><div class="eyebrow">Build</div><h2>Workspaces</h2><p>Give a person or team an isolated place to build and run services.</p></div><span class="status" id="workspaceStatus"><i class="dot"></i>Not loaded</span></div>
+    <div class="grid">
+      <div class="panel">
+        <h3>Create a workspace</h3>
+        <p class="muted">GAMGEE creates production and staging namespaces with default resource quotas. The owner email is registered with the Capsule tenancy policy; configure your identity provider separately for interactive sign-in.</p>
+        <form id="workspaceForm">
+          <div class="form-grid">
+            <label class="form-field">Workspace name<input id="workspaceName" required maxlength="63" pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?" placeholder="acme-team"></label>
+            <label class="form-field">Owner email<input id="ownerEmail" type="email" required maxlength="254" placeholder="owner@example.com"></label>
+          </div>
+          <div class="form-actions"><button type="submit">Create workspace</button></div>
+        </form>
+      </div>
+      <div class="panel">
+        <h3>Your workspaces</h3>
+        <div id="workspaceList" class="muted">Connect to load workspaces.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="apps">
+    <div class="section-head"><div><div class="eyebrow">Launch</div><h2>Applications</h2><p>Deploy a versioned OCI image. GAMGEE handles the deployment, service, health probes and basic runtime guardrails.</p></div></div>
+    <div class="grid">
+      <div class="panel">
+        <h3>Launch an application</h3>
+        <form id="appForm">
+          <div class="form-grid">
+            <label class="form-field">Workspace<select id="appWorkspace" required><option value="">Select workspace</option></select></label>
+            <label class="form-field">App name<input id="appName" required maxlength="63" pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?" placeholder="customer-api"></label>
+            <label class="form-field full">Container image<input id="appImage" required placeholder="ghcr.io/company/service:v1.4.2"><span class="help">Use an explicit version tag or sha256 digest. The :latest tag is rejected.</span></label>
+            <label class="form-field">Container port<input id="appPort" type="number" min="1024" max="65535" value="8080" required></label>
+            <label class="form-field">Capacity size<select id="appSize"><option value="small">Small · 100m CPU / 128 MiB</option><option value="standard">Standard · 250m CPU / 256 MiB</option><option value="large">Large · 500m CPU / 512 MiB</option></select></label>
+            <label class="form-field">Instances<input id="appReplicas" type="number" min="1" max="20" value="1"></label>
+            <label class="form-field">Health path<input id="appHealth" value="/" maxlength="128"></label>
+            <label class="form-field">Public hostname (optional)<input id="appHost" placeholder="app.example.com"></label>
+            <label class="form-field">Existing TLS secret<input id="appTls" placeholder="app-example-com-tls"></label>
+          </div>
+          <div class="help">Apps are private by default. Public access is created only when both a hostname and an existing TLS secret are supplied.</div>
+          <div class="form-actions"><button type="submit">Launch app</button></div>
+        </form>
+      </div>
+      <div class="panel">
+        <h3>Running applications</h3>
+        <label class="form-field">Workspace<select id="appsWorkspace"><option value="">Select workspace</option></select></label>
+        <div id="appList" class="muted" style="margin-top:12px">Select a workspace to inspect its applications.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="functions">
+    <div class="section-head"><div><div class="eyebrow">Launch</div><h2>Native Functions</h2><p>Run prebuilt WebAssembly functions and scale them from zero on HTTP demand.</p></div></div>
+    <div class="grid">
+      <div class="panel">
+        <h3>Launch a function</h3>
+        <form id="functionForm">
+          <div class="form-grid">
+            <label class="form-field">Workspace<select id="functionWorkspace" required><option value="">Select workspace</option></select></label>
+            <label class="form-field">Function name<input id="functionName" required maxlength="63" pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?" placeholder="thumbnail"></label>
+            <label class="form-field full">Spin WebAssembly OCI artifact<input id="functionImage" required placeholder="ghcr.io/company/thumbnail:v1.0.0"><span class="help">Use a published Spin/WASM artifact with an explicit version tag or sha256 digest. Ordinary Docker images are not supported by this runtime.</span></label>
+            <label class="form-field">HTTP path prefix<input id="functionPath" value="/" maxlength="256"></label>
+            <label class="form-field">Concurrency per replica<input id="functionConcurrency" type="number" min="1" max="1000" value="50" required></label>
+            <label class="form-field">Minimum replicas<input id="functionMin" type="number" min="0" max="20" value="0" required></label>
+            <label class="form-field">Maximum replicas<input id="functionMax" type="number" min="1" max="20" value="10" required></label>
+            <label class="form-field">Scale-down cooldown (seconds)<input id="functionCooldown" type="number" min="30" max="1800" value="120" required></label>
+            <label class="form-field">Public hostname (optional)<input id="functionHost" placeholder="functions.example.com"></label>
+            <label class="form-field">Existing TLS secret in keda namespace<input id="functionTls" placeholder="functions-example-com-tls"></label>
+          </div>
+          <div class="help">Requires the Function Cloud capability. Functions are private to the cluster by default. Public access requires both a hostname and a pre-created Kubernetes TLS Secret in the shared keda namespace. The HTTP runtime queues up to 100 cold-start requests per interceptor before rejecting excess traffic.</div>
+          <div class="form-actions"><button type="submit">Launch function</button></div>
+        </form>
+      </div>
+      <div class="panel">
+        <h3>Functions in a workspace</h3>
+        <label class="form-field">Workspace<select id="functionsWorkspace"><option value="">Select workspace</option></select></label>
+        <div id="functionList" class="muted" style="margin-top:12px">Select a workspace to inspect its Functions.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="compute">
+    <div class="section-head"><div><div class="eyebrow">Scale</div><h2>Add compute</h2><p>Add worker machines to the same GAMGEE cloud. Applications remain in the same workspace model.</p></div></div>
+    <div class="panel">
+      <div class="grid">
+        <div>
+          <h3>1. Get the node join token on the control-plane machine</h3>
+          <p class="muted">Run this on the machine where GAMGEE Core Cloud is installed. Treat the token like a root password and share it only over a trusted private channel.</p>
+          <pre class="code">sudo cat /var/lib/rancher/k3s/server/node-token</pre>
+          <h3 style="margin-top:18px">2. Join the worker</h3>
+          <p class="muted">On the worker, check out the same GAMGEE release and run the join script. It prompts for the token without echoing it or putting it in shell history.</p>
+          <pre class="code">sudo bash scripts/join-compute-node.sh https://CONTROL-PLANE-DNS-OR-IP:6443</pre>
+          <p class="help">Pin GAMGEE_K3S_VERSION to the exact version shown by <code>k3s --version</code> on the control-plane node. Keep TCP 6443 and the K3s node traffic ports reachable only on your trusted private network.</p>
+        </div>
+        <div>
+          <h3>Current compute</h3>
+          <div id="nodeList" class="muted">Connect to inspect nodes.</div>
+          <p class="muted" style="margin-top:16px">This release adds K3s worker nodes to one cluster. It does not yet provide multiple control-plane servers, automatic node pools, shared storage, or cross-site federation.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="advanced">
+    <div class="section-head"><div><div class="eyebrow">Optional capabilities</div><h2>Advanced setup</h2><p>Most users do not need to choose infrastructure components. Add capabilities only when there is a reason.</p></div></div>
+    <div class="panel">
+      <details>
+        <summary>Open the installation catalogue</summary>
+        <p class="muted">GAMGEE resolves dependencies and execution order automatically. The profile IDs are implementation bundles, not separate cloud products.</p>
+        <div class="profile-grid" id="profiles">
+          <label class="profile"><input type="checkbox" value="function-cloud"><span><strong>Function Cloud</strong><small>SpinKube WebAssembly runtime and KEDA HTTP scale-to-zero.</small></span></label>
+          <label class="profile"><input type="checkbox" value="private-iaas"><span><strong>Private IaaS</strong><small>Incus and QEMU/KVM host foundation.</small></span></label>
+          <label class="profile"><input type="checkbox" value="ai-enterprise"><span><strong>AI Enterprise</strong><small>Private AI Factory and local model runtime.</small></span></label>
+          <label class="profile"><input type="checkbox" value="enterprise-security"><span><strong>Enterprise Security</strong><small>Kyverno admission-policy foundation.</small></span></label>
+          <label class="profile"><input type="checkbox" value="federated-observability"><span><strong>Federated Observability</strong><small>Local VictoriaMetrics and Grafana starter stack.</small></span></label>
+          <label class="profile"><input type="checkbox" value="hybrid-cloud"><span><strong>Hybrid Cloud</strong><small>OpenTofu workspace validation scaffold.</small></span></label>
+        </div>
+        <div class="form-actions"><button id="planAdvanced" class="ghost">Preview selected capabilities</button><button id="applyAdvanced" disabled>Approve and install</button></div>
+      </details>
+      <div id="planResult" class="hidden" style="margin-top:16px"><div id="planSummary" class="muted"></div><pre id="planJson" class="pre"></pre></div>
+    </div>
+  </section>
+
+  <section class="section" id="activity">
+    <div class="section-head"><div><div class="eyebrow">Operate</div><h2>Recent activity</h2><p>Every Control Tower installation job is recorded with its plan and execution log.</p></div><button class="ghost" id="refreshJobs">Refresh activity</button></div>
+    <div class="panel"><div id="jobs" class="muted">Connect to view operations.</div></div>
+  </section>
+  <div class="footer">GAMGEE Cloud OS · Opinionated foundations, explicit actions, inspectable plans. This early release is not a production HA or regulatory-compliance certification.</div>
+</main>
+</div>
+<script>
+let token="", applyEnabled=false, advancedPlan=null, workspaces=[];
+const $=id=>document.getElementById(id);
+function message(text,error=false){$("message").textContent=text;$("message").className="message"+(error?" error":"");$("message").style.display="block"}
+function nodeStatus(ok){return '<i class="dot '+(ok?'ok':'warn')+'"></i>'}
+async function api(path,options={}){const headers={"Authorization":"Bearer "+token,...(options.headers||{})};if(options.body)headers["Content-Type"]="application/json";const response=await fetch(path,{...options,headers});const payload=await response.json().catch(()=>({detail:response.statusText}));if(!response.ok){const detail=payload.detail;throw new Error(typeof detail==="string"?detail:(detail?.message||JSON.stringify(detail)||response.statusText))}return payload}
+function addText(parent,text,className){const element=document.createElement("div");if(className)element.className=className;element.textContent=text;parent.appendChild(element);return element}
+function fillWorkspaceSelect(select){const prior=select.value;select.replaceChildren(new Option("Select workspace",""));workspaces.forEach(w=>select.add(new Option(w.name,w.name)));if(workspaces.some(w=>w.name===prior))select.value=prior}
+async function loadWorkspaces(){const data=await api("/v1/tower/workspaces");workspaces=data.workspaces||[];$("workspaceCount").textContent=workspaces.length;$("workspaceStatus").innerHTML=nodeStatus(true)+" "+workspaces.length+" loaded";$("workspaceList").replaceChildren();if(!workspaces.length)addText($("workspaceList"),"No workspaces yet. Create the first one here.");workspaces.forEach(w=>{const line=document.createElement("div");line.className="job";const left=document.createElement("span");left.textContent=w.name+" · production + staging";const right=document.createElement("span");right.className="tag";right.textContent="Workspace";line.append(left,right);$("workspaceList").appendChild(line)});fillWorkspaceSelect($("appWorkspace"));fillWorkspaceSelect($("appsWorkspace"));fillWorkspaceSelect($("functionWorkspace"));fillWorkspaceSelect($("functionsWorkspace"))}
+async function loadApps(){const workspace=$("appsWorkspace").value;$("appList").replaceChildren();if(!workspace){addText($("appList"),"Select a workspace to inspect its applications.");return}const data=await api("/v1/tower/workspaces/"+encodeURIComponent(workspace)+"/apps");if(!data.apps.length){addText($("appList"),"No GAMGEE applications in this workspace yet.");return}data.apps.forEach(app=>{const row=document.createElement("div");row.className="job";const body=document.createElement("div");const title=document.createElement("strong");title.textContent=app.name;const sub=document.createElement("div");sub.className="help";sub.textContent=app.status+" · "+app.ready_replicas+"/"+app.desired_replicas+" ready · "+app.image;body.append(title,sub);const controls=document.createElement("div");controls.className="actions";const action=(label,fn,cls="ghost")=>{const b=document.createElement("button");b.className=cls;b.textContent=label;b.onclick=fn;controls.appendChild(b)};action("Stop",async()=>{try{await api("/v1/tower/workspaces/"+workspace+"/apps/"+app.name+"/scale",{method:"POST",body:JSON.stringify({replicas:0})});await loadApps()}catch(e){message(String(e),true)}});action("Start",async()=>{try{await api("/v1/tower/workspaces/"+workspace+"/apps/"+app.name+"/resume",{method:"POST"});await loadApps()}catch(e){message(String(e),true)}});action("Restart",async()=>{try{await api("/v1/tower/workspaces/"+workspace+"/apps/"+app.name+"/restart",{method:"POST"});message("Restart requested for "+app.name);await loadApps()}catch(e){message(String(e),true)}});action("Delete",async()=>{if(!confirm("Delete the stateless app resources for "+app.name+"?"))return;try{await api("/v1/tower/workspaces/"+workspace+"/apps/"+app.name,{method:"DELETE"});message("Delete requested for "+app.name);await loadApps()}catch(e){message(String(e),true)}}, "danger");row.append(body,controls);$("appList").appendChild(row)})}
+async function loadFunctions(){const workspace=$("functionsWorkspace").value;$("functionList").replaceChildren();if(!workspace){addText($("functionList"),"Select a workspace to inspect its Functions.");return}const data=await api("/v1/tower/workspaces/"+encodeURIComponent(workspace)+"/functions");if(!data.functions.length){addText($("functionList"),"No GAMGEE Functions in this workspace yet.");return}data.functions.forEach(fn=>{const row=document.createElement("div");row.className="job";const body=document.createElement("div");const title=document.createElement("strong");title.textContent=fn.name;const sub=document.createElement("div");sub.className="help";sub.textContent=fn.state+" · "+fn.ready_replicas+" ready · "+fn.min_replicas+"–"+fn.max_replicas+" replicas · "+fn.image;const url=document.createElement("div");url.className="help";url.textContent=fn.public_url||fn.internal_url||"Waiting for Function runtime";body.append(title,sub,url);const controls=document.createElement("div");controls.className="actions";const b=document.createElement("button");b.className="danger";b.textContent="Delete";b.onclick=async()=>{if(!confirm("Delete Function "+fn.name+" and its GAMGEE-managed runtime resources?"))return;try{await api("/v1/resources/"+encodeURIComponent(fn.resource_id)+"?workspace="+encodeURIComponent(workspace),{method:"DELETE"});message("Function deletion requested for "+fn.name);await loadFunctions()}catch(e){message(String(e),true)}};controls.appendChild(b);row.append(body,controls);$("functionList").appendChild(row)})}
+async function loadJobs(){const data=await api("/v1/tower/jobs");$("jobCount").textContent=data.jobs.length;$("jobs").replaceChildren();if(!data.jobs.length){addText($("jobs"),"No installation jobs recorded.");return}data.jobs.forEach(job=>{const row=document.createElement("div");row.className="job";const left=document.createElement("span");left.textContent=job.profiles.join(" → ")+" · "+job.created_at;const right=document.createElement("strong");right.textContent=job.status;row.append(left,right);row.title=job.logs||"";$("jobs").appendChild(row)})}
+async function refreshAll(){try{const state=await api("/v1/tower/cloud/status");$("cloudState").textContent=state.state;$("nodeCount").textContent=state.node_count;$("nodeDesc").textContent=state.not_ready_count?state.not_ready_count+" node(s) not ready":"All nodes ready";$("nodeList").replaceChildren();state.nodes.forEach(n=>{const r=document.createElement("div");r.className="job";const a=document.createElement("span");a.textContent=n.name;const b=document.createElement("span");b.innerHTML=nodeStatus(n.ready)+(n.ready?" Ready":" Not ready");r.append(a,b);$("nodeList").appendChild(r)});await loadWorkspaces();if($("appsWorkspace").value)await loadApps();if($("functionsWorkspace").value)await loadFunctions();await loadJobs()}catch(error){$("cloudState").textContent="Not ready";$("nodeCount").textContent="—";$("nodeDesc").textContent=String(error);message("Connected to the Control Tower, but the cluster is not ready: "+error,true)}}
+$("connect").onclick=async()=>{token=$("token").value.trim();try{const caps=await api("/v1/tower/capabilities");applyEnabled=caps.apply_enabled;$("connection").innerHTML=nodeStatus(true)+" Connected";$("installHelp").textContent=applyEnabled?"Installation actions are enabled on this local control host; every apply still requires a plan and explicit approval.":"Planning only. The host operator must enable apply before installation can run.";message("Secure Control Tower connection established.");await refreshAll()}catch(error){token="";$("connection").innerHTML=nodeStatus(false)+" Offline";message(String(error),true)}};
+async function installProfiles(profiles){if(!token)throw Error("Connect to GAMGEE first.");const plan=await api("/v1/tower/plan",{method:"POST",body:JSON.stringify({profiles})});advancedPlan=plan;$("planResult").classList.remove("hidden");$("planSummary").textContent="Resources: "+JSON.stringify(plan.required_resources)+" · Order: "+plan.ordered_profiles.join(" → ")+" · "+[...plan.blockers,...plan.warnings].join(" ");$("planJson").textContent=JSON.stringify(plan,null,2);$("applyAdvanced").disabled=!applyEnabled||!plan.apply_ready;return plan}
+$("installCore").onclick=async()=>{try{if(!token)throw Error("Connect to GAMGEE first.");const bundle=await api("/v1/tower/cloud/recommendation");const plan=await api("/v1/tower/plan",{method:"POST",body:JSON.stringify({profiles:bundle.profiles})});const included=bundle.included.map(x=>x.name).join(", ");const skipped=bundle.skipped.map(x=>x.name+": "+x.reason).join("\n");$("cloudPlanSummary").textContent="Included: "+included+(skipped?"\\nNot included: "+skipped:"");$("planResult").classList.remove("hidden");$("planSummary").textContent="GAMGEE Local Cloud · "+JSON.stringify(plan.required_resources)+" · Order: "+plan.ordered_profiles.join(" → ")+"\n"+$("cloudPlanSummary").textContent;$("planJson").textContent=JSON.stringify(plan,null,2);if(!plan.apply_ready)throw Error("Host preflight found blockers or missing tools. Review the generated plan in Advanced setup.");if(!applyEnabled)throw Error("Installation is disabled on this Control Tower. Enable apply on the host first.");if(!confirm("Install GAMGEE Local Cloud on this machine?\\n\\nIncluded: "+included+"\\n\\n"+(skipped?"Skipped: "+skipped+"\\n\\n":"")+"The approved plan will install only the capabilities this host supports."))return;const job=await api("/v1/tower/jobs",{method:"POST",body:JSON.stringify({profiles:bundle.profiles,plan_hash:plan.plan_hash,mode:"apply",approved:true})});message("GAMGEE Local Cloud installation started. Job "+job.id);await loadJobs();watchJob(job.id)}catch(error){message(String(error),true)}};
+$("workspaceForm").onsubmit=async event=>{event.preventDefault();try{const data=await api("/v1/tower/workspaces",{method:"POST",body:JSON.stringify({name:$("workspaceName").value,owner_email:$("ownerEmail").value})});message("Workspace "+data.name+" accepted. Capsule is creating its namespaces; refresh in a few seconds before launching an app.");$("workspaceName").value="";await loadWorkspaces()}catch(error){message(String(error),true)}};
+$("appForm").onsubmit=async event=>{event.preventDefault();try{const workspace=$("appWorkspace").value;if(!workspace)throw Error("Create and select a workspace first.");const body={name:$("appName").value,image:$("appImage").value,port:Number($("appPort").value),size:$("appSize").value,replicas:Number($("appReplicas").value),health_path:$("appHealth").value};if($("appHost").value.trim())body.hostname=$("appHost").value.trim();if($("appTls").value.trim())body.tls_secret=$("appTls").value.trim();const data=await api("/v1/tower/workspaces/"+workspace+"/apps",{method:"POST",body:JSON.stringify(body)});message("App "+data.app+" is deploying in "+data.namespace+".");$("appsWorkspace").value=workspace;await loadApps()}catch(error){message(String(error),true)}};
+$("appsWorkspace").onchange=()=>loadApps().catch(e=>message(String(e),true));
+$("functionsWorkspace").onchange=()=>loadFunctions().catch(e=>message(String(e),true));
+$("functionForm").onsubmit=async event=>{event.preventDefault();try{const workspace=$("functionWorkspace").value;if(!workspace)throw Error("Create and select a workspace first.");const spec={name:$("functionName").value,image:$("functionImage").value,path:$("functionPath").value,min_replicas:Number($("functionMin").value),max_replicas:Number($("functionMax").value),concurrency:Number($("functionConcurrency").value),cooldown_seconds:Number($("functionCooldown").value)};if($("functionHost").value.trim())spec.hostname=$("functionHost").value.trim();if($("functionTls").value.trim())spec.tls_secret=$("functionTls").value.trim();const data=await api("/v1/resources/functions",{method:"POST",body:JSON.stringify({workspace,spec})});message("Function "+data.function+" accepted by the Resource Engine. Track its deployment state in the Functions list.");$("functionsWorkspace").value=workspace;await loadFunctions()}catch(error){message(String(error),true)}};
+
+$("planAdvanced").onclick=async()=>{try{const profiles=["core-cloud",...Array.from(document.querySelectorAll("#profiles input:checked")).map(x=>x.value)];const plan=await installProfiles([...new Set(profiles)]);message("Advanced plan generated. Review dependencies, resources and warnings before applying.")}catch(error){message(String(error),true)}};
+$("applyAdvanced").onclick=async()=>{if(!advancedPlan)return;try{if(!confirm("Apply the reviewed GAMGEE capability plan to this host?"))return;const job=await api("/v1/tower/jobs",{method:"POST",body:JSON.stringify({profiles:advancedPlan.ordered_profiles,plan_hash:advancedPlan.plan_hash,mode:"apply",approved:true})});message("Capability installation started. Job "+job.id);await loadJobs();watchJob(job.id)}catch(error){message(String(error),true)}};
+function watchJob(id){const timer=setInterval(async()=>{try{const job=await api("/v1/tower/jobs/"+id);await loadJobs();if(["succeeded","failed"].includes(job.status)){clearInterval(timer);message("Installation job "+job.status+". Review Activity and the job log.")}}catch(error){clearInterval(timer);message(String(error),true)}},3000)}
+$("refresh").onclick=()=>refreshAll();$("refreshJobs").onclick=()=>loadJobs().catch(e=>message(String(e),true));
+setInterval(()=>{if(token&&$("appsWorkspace").value)loadApps().catch(()=>{});if(token&&$("functionsWorkspace").value)loadFunctions().catch(()=>{});},5000);
+</script>
+</body>
+</html>

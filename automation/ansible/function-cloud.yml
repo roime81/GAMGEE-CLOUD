@@ -1,0 +1,222 @@
+---
+- name: Install GAMGEE Native Function Cloud
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  vars:
+    keda_chart_version: "2.20.0"
+    keda_http_chart_version: "0.16.0"
+    cert_manager_version: "v1.20.0"
+    runtime_class_manager_version: "0.2.0"
+    spin_shim_version: "v0.27.2"
+    spin_operator_version: "0.6.1"
+  tasks:
+    - name: Verify Kubernetes is available
+      ansible.builtin.command:
+        argv: [kubectl, get, nodes]
+      changed_when: false
+
+    - name: Add KEDA Helm repository
+      ansible.builtin.command:
+        argv:
+          - helm
+          - repo
+          - add
+          - kedacore
+          - https://kedacore.github.io/charts
+      register: keda_repo
+      changed_when: "'has been added' in keda_repo.stdout or 'has been added' in keda_repo.stderr"
+      failed_when: keda_repo.rc != 0 and 'already exists' not in (keda_repo.stderr | lower)
+
+    - name: Refresh Helm repositories
+      ansible.builtin.command:
+        argv: [helm, repo, update]
+      changed_when: false
+
+    - name: Install or upgrade KEDA
+      ansible.builtin.command:
+        argv:
+          - helm
+          - upgrade
+          - --install
+          - keda
+          - kedacore/keda
+          - --version
+          - "{{ keda_chart_version }}"
+          - --namespace
+          - keda
+          - --create-namespace
+          - --wait
+          - --timeout
+          - 10m
+      register: keda_install
+      changed_when: "'has been upgraded' in keda_install.stdout or 'has been installed' in keda_install.stdout"
+
+    - name: Verify KEDA deployment
+      ansible.builtin.command:
+        argv: [kubectl, rollout, status, deployment/keda-operator, -n, keda, --timeout=180s]
+      changed_when: false
+
+    - name: Install cert-manager for Spin Operator admission webhooks
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - --filename
+          - "https://github.com/cert-manager/cert-manager/releases/download/{{ cert_manager_version }}/cert-manager.yaml"
+      register: cert_manager_apply
+      changed_when: "'created' in cert_manager_apply.stdout or 'configured' in cert_manager_apply.stdout"
+
+    - name: Wait for cert-manager admission webhook
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - wait
+          - --for=condition=available
+          - --timeout=300s
+          - deployment
+          - --all
+          - --namespace
+          - cert-manager
+      changed_when: false
+
+    - name: Install Runtime Class Manager
+      ansible.builtin.command:
+        argv:
+          - helm
+          - upgrade
+          - --install
+          - runtime-class-manager
+          - --namespace
+          - runtime-class-manager
+          - --create-namespace
+          - --version
+          - "{{ runtime_class_manager_version }}"
+          - oci://ghcr.io/spinframework/charts/runtime-class-manager
+          - --wait
+          - --timeout
+          - 10m
+      register: runtime_class_manager_install
+      changed_when: "'has been upgraded' in runtime_class_manager_install.stdout or 'has been installed' in runtime_class_manager_install.stdout"
+
+    - name: Install the Spin containerd shim on eligible Kubernetes nodes
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - --filename
+          - "https://github.com/spinframework/containerd-shim-spin/releases/download/{{ spin_shim_version }}/runtime-class-manager-shim-v1alpha1-{{ spin_shim_version }}.yaml"
+      register: spin_shim_apply
+      changed_when: "'created' in spin_shim_apply.stdout or 'configured' in spin_shim_apply.stdout"
+
+    - name: Mark current compute nodes as WASM-capable for Runtime Class Manager
+      ansible.builtin.command:
+        argv: [kubectl, label, node, --all, spin=true, --overwrite]
+      register: spin_node_labels
+      changed_when: "'labeled' in spin_node_labels.stdout"
+
+    - name: Install Spin Operator CRDs
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - --filename
+          - "https://github.com/spinframework/spin-operator/releases/download/{{ spin_operator_version }}/spin-operator.crds.yaml"
+      register: spin_crds_apply
+      changed_when: "'created' in spin_crds_apply.stdout or 'configured' in spin_crds_apply.stdout"
+
+    - name: Install the SpinApp executor that uses the managed Wasm runtime class
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - --filename
+          - "https://github.com/spinframework/spin-operator/releases/download/{{ spin_operator_version }}/spin-operator.shim-executor.yaml"
+      register: spin_executor_apply
+      changed_when: "'created' in spin_executor_apply.stdout or 'configured' in spin_executor_apply.stdout"
+
+    - name: Install or upgrade Spin Operator
+      ansible.builtin.command:
+        argv:
+          - helm
+          - upgrade
+          - --install
+          - spin-operator
+          - --namespace
+          - spin-operator
+          - --create-namespace
+          - --version
+          - "{{ spin_operator_version }}"
+          - --wait
+          - --timeout
+          - 10m
+          - oci://ghcr.io/spinframework/charts/spin-operator
+      register: spin_operator_install
+      changed_when: "'has been upgraded' in spin_operator_install.stdout or 'has been installed' in spin_operator_install.stdout"
+
+    - name: Wait for Spin Operator deployments
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - wait
+          - --for=condition=available
+          - --timeout=300s
+          - deployment
+          - --all
+          - --namespace
+          - spin-operator
+      changed_when: false
+
+    - name: Wait for the managed Spin runtime class
+      ansible.builtin.command:
+        argv: [kubectl, get, runtimeclass, wasmtime-spin-v2]
+      register: spin_runtime_class
+      changed_when: false
+      retries: 30
+      delay: 10
+      until: spin_runtime_class.rc == 0
+
+    - name: Install the KEDA HTTP Add-on for request-aware scale-to-zero
+      ansible.builtin.command:
+        argv:
+          - helm
+          - upgrade
+          - --install
+          - http-add-on
+          - kedacore/keda-add-ons-http
+          - --version
+          - "{{ keda_http_chart_version }}"
+          - --namespace
+          - keda
+          - --wait
+          - --timeout
+          - 10m
+      register: keda_http_install
+      changed_when: "'has been upgraded' in keda_http_install.stdout or 'has been installed' in keda_http_install.stdout"
+
+    - name: Wait for KEDA HTTP Add-on deployments
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - wait
+          - --for=condition=available
+          - --timeout=300s
+          - deployment
+          - --all
+          - --namespace
+          - keda
+      changed_when: false
+
+    - name: Verify GAMGEE Function API custom resources are installed
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - get
+          - crd
+          - spinapps.core.spinkube.dev
+          - interceptorroutes.http.keda.sh
+          - scaledobjects.keda.sh
+      changed_when: false

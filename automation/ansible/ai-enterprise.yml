@@ -1,0 +1,45 @@
+---
+- name: Start GAMGEE AI Enterprise stack
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Require a configured environment file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../.env"
+      register: env_file
+
+    - name: Stop if secrets have not been configured
+      ansible.builtin.assert:
+        that: [env_file.stat.exists]
+        fail_msg: "Create .env from .env.example and replace every placeholder secret before enabling AI Enterprise."
+
+    - name: Validate Docker Compose configuration
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - docker-compose.yml
+          - -f
+          - docker-compose.ai-factory.yml
+          - config
+          - --quiet
+        chdir: "{{ playbook_dir }}/../.."
+      changed_when: false
+
+    - name: Start the existing private AI Factory stack
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - docker-compose.yml
+          - -f
+          - docker-compose.ai-factory.yml
+          - up
+          - -d
+          - --build
+        chdir: "{{ playbook_dir }}/../.."
+      register: compose_result
+      changed_when: "'Started' in compose_result.stdout or 'Running' in compose_result.stdout or 'Created' in compose_result.stdout"

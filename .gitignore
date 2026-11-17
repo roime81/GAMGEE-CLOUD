@@ -5,3 +5,11 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# GAMGEE Control Tower runtime state and credentials
+control-tower/.venv/
+control-tower/.tower-token
+control-tower/var/
+
+# OpenTofu local working data
+**/.terraform/

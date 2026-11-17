@@ -1,0 +1,17 @@
+schema_version: 1
+id: ai-enterprise
+name: AI Enterprise
+description: Starts the existing private AI Factory stack. Model download and GPU enablement are separate capacity-aware actions.
+implementation: executable-foundation
+depends_on: [core-cloud, enterprise-security]
+components: [ollama, qdrant, postgres, nats, ai-factory, mcp-gateway]
+resources:
+  minimum_vcpu: 8
+  minimum_ram_gib: 24
+  minimum_disk_gib: 100
+required_tools: [ansible-playbook, docker]
+artifacts: [docker-compose.yml, docker-compose.ai-factory.yml]
+steps:
+  - executor: ansible-playbook
+    playbook: automation/ansible/ai-enterprise.yml
+    timeout_seconds: 3600

@@ -1,0 +1,17 @@
+schema_version: 1
+id: federated-observability
+name: Federated Observability
+description: Installs the VictoriaMetrics Kubernetes monitoring stack. Remote federation and tenant routing require site registration.
+implementation: executable-foundation
+depends_on: [core-cloud]
+components: [victoria-metrics-k8s-stack, grafana, alerting, opencost]
+resources:
+  minimum_vcpu: 2
+  minimum_ram_gib: 4
+  minimum_disk_gib: 80
+required_tools: [ansible-playbook]
+artifacts: [platform/observability/vmks-values.yaml]
+steps:
+  - executor: ansible-playbook
+    playbook: automation/ansible/federated-observability.yml
+    timeout_seconds: 1800
