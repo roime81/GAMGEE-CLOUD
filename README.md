@@ -13,7 +13,7 @@ The product experience is deliberately small:
 
 The underlying platform uses open-source infrastructure, but GAMGEE owns the user experience, intent model, safe provisioning workflow and lifecycle boundary.
 
-> **Release status: early engineering preview.** The repository contains a working installation Control Tower, initial workspace and stateless application APIs, a K3s worker join path, an existing AI Factory and several optional infrastructure profiles. This is not yet a production-ready, highly available cloud, a complete FaaS platform, a full VM cloud, or a certified security product. The capability matrix below is explicit about what works and what remains planned.
+> **Release status: early engineering preview.** The repository contains a working installation Control Tower, workspace and stateless application APIs, a first native WebAssembly HTTP Function resource using SpinKube and KEDA, a K3s worker join path, an existing AI Factory and optional infrastructure profiles. This is not yet a production-ready or highly available cloud, a complete multi-trigger FaaS platform, a full VM cloud, or a certified security product. The capability matrix below is explicit about what works and what remains planned.
 
 ---
 
@@ -44,11 +44,12 @@ A user should be able to say:
 
 - "Create a workspace for the finance team."
 - "Launch this application in the finance workspace."
+- "Launch an HTTP function in the finance workspace."
 - "Give the application two instances."
 - "Stop the application."
 - "Add another compute machine."
 
-The current release implements guided workspace and stateless container-application operations. Natural-language compilation, native functions, managed data services, VM lifecycle and autonomous operations remain staged engineering work.
+The current preview implements guided workspace and stateless application operations plus prebuilt Spin WebAssembly HTTP Functions with KEDA request-aware scale-to-zero when Function Cloud is installed. Source builds, queue/schedule triggers, managed data services, VM lifecycle and autonomous operations remain staged engineering work.
 
 ### What GAMGEE is not
 
@@ -71,7 +72,7 @@ GAMGEE uses a small number of product concepts. These are intended to remain sta
 | **Cell** | One GAMGEE cloud boundary: a control plane and its compute members. | One K3s cluster, currently with one server/control-plane node and optional agent nodes. |
 | **Workspace** | A tenant boundary for a team, customer, product or project. | Capsule Tenant with production and staging namespaces and resource quotas. |
 | **Application** | A versioned service that GAMGEE deploys and operates. | Deployment + ClusterIP Service, optionally a TLS-backed Traefik Ingress. |
-| **Function** | A short-lived event- or request-triggered unit of code. | KEDA is installed by the Function Cloud profile; the GAMGEE Function API and runtime controller are planned. |
+| **Function** | A short-lived event- or request-triggered unit of code. | A versioned Spin/WASM OCI artifact managed as a GAMGEE Function resource by SpinKube, with KEDA HTTP concurrency scaling and scale-to-zero. Requires the Function Cloud profile. |
 | **Machine** | A virtual machine with a lifecycle, image, network, disk and policy. | Incus/QEMU/KVM installation foundation exists; the GAMGEE machine resource lifecycle is planned. |
 | **Service** | A managed capability such as PostgreSQL, object storage, messaging or vector search. | Selected AI Factory services exist in Compose; a unified managed-service catalogue is planned. |
 | **Route** | A declared way to reach an application or function. | Optional Traefik Ingress with an existing TLS secret. |
@@ -110,7 +111,7 @@ The target architecture separates the user experience from infrastructure execut
     Cross-cutting: identity · security · secrets · observability
                    audit · backup · governance · FinOps
 
-The diagram describes the intended design boundary, not a claim that every adapter or cross-cutting service is complete today. The current release has the Control Tower, a Kubernetes application compiler/adapter, a workspace adapter, K3s worker joining and the initial installation profiles.
+The diagram describes the intended design boundary, not a claim that every adapter or cross-cutting service is complete today. The current release has the Control Tower, Application and Function Kubernetes drivers, a workspace adapter, K3s worker joining and the installation profiles. The Function driver compiles typed GAMGEE intent into SpinApp, InterceptorRoute, ScaledObject, a tokenless ServiceAccount, proxy Service and optional TLS-backed ingress resources; it does not accept raw Kubernetes YAML.
 
 ---
 
@@ -352,13 +353,19 @@ The original server remains a control-plane dependency and a single point of fai
                 +-------+-------+
                 |               |
              Workspace A     Workspace B
-             production      production
-             staging         staging
                 |               |
-             Deployment      Deployment
-             Service         Service
-             optional        optional
-             Ingress         Ingress
+       +--------+-------+       +--------+
+       |                |                |
+   Application       Function        Application
+   Deployment       SpinApp CR       Deployment
+   Service          Spin Operator    Service
+   Ingress?          WASM shim        Ingress?
+                    InterceptorRoute
+                    KEDA ScaledObject
+                    ExternalName proxy
+                        |
+                KEDA HTTP interceptor
+                 (shared namespace)
 
 ### Repository layout
 
@@ -367,6 +374,9 @@ The original server remains a control-plane dependency and a single point of fai
 | control-tower/tower/main.py | Control Tower HTTP API, authentication and user-facing operations. |
 | control-tower/tower/cluster.py | Narrow Kubernetes adapter. Invokes a fixed kubectl executable through argument arrays; never uses a shell. |
 | control-tower/tower/workloads.py | Typed Workspace/Application intent models and deterministic Kubernetes resource compilation. |
+| control-tower/tower/resource_models.py | Versioned GAMGEE Application and Function resource schemas. |
+| control-tower/tower/drivers/kubernetes_application.py | Application resource adapter for Deployment, Service and optional Ingress. |
+| control-tower/tower/drivers/kubernetes_function.py | Function adapter compiling SpinKube and KEDA HTTP resources with ownership checks. |
 | control-tower/tower/catalog.py | Loads and validates internal installation bundles and resolves their dependency graph. |
 | control-tower/tower/planner.py | Host preflight, resource estimates, source checksums and plan fingerprint. |
 | control-tower/tower/runner.py | Serialized execution of repository-owned Ansible playbooks. |
@@ -389,7 +399,7 @@ Users should not need to understand these IDs for ordinary operation. The Contro
 | Capability | Current implementation | Not yet delivered |
 | --- | --- | --- |
 | Core Cloud | K3s, Helm, Capsule, Traefik, OpenCost. | HA control plane, full backup/restore automation and production network-policy enforcement. |
-| Function Cloud | KEDA installation. | Native GAMGEE Function resource/API, WASM runtime controller, event/HTTP/cron lifecycle and function-level billing. |
+| Function Cloud | SpinKube WebAssembly runtime (Runtime Class Manager, Spin Operator) and KEDA HTTP Add-on. | Source-to-WASM build pipeline, queue/event/schedule triggers, secret/volume bindings, per-function telemetry and invocation billing. |
 | Private IaaS | Incus and QEMU/KVM host foundation. | Complete GAMGEE VM API, image catalogue, tenant VM networking, storage lifecycle and multi-node Incus cluster. |
 | AI Enterprise | Starts the existing Docker Compose AI Factory after local environment validation. | Production GPU scheduling, model governance/evaluation lifecycle, enterprise policy integration and end-to-end HA. |
 | Enterprise Security | Kyverno installation foundation. | Full OpenBao lifecycle, enforced signed-image policy, certificate automation, comprehensive network security and compliance evidence. |
@@ -400,7 +410,7 @@ Users should not need to understand these IDs for ordinary operation. The Contro
 
 K3s is the current container execution engine. Capsule provides the initial tenant boundary. Traefik handles ingress. These are replaceable adapters.
 
-The user-facing objects are intended to remain GAMGEE resources. A future resource such as GamgeeFunction or GamgeeMachine should have a stable GAMGEE API and lifecycle contract even if the implementation later moves from KEDA to another function runtime, or from Incus to another hypervisor.
+The user-facing objects are GAMGEE resources. `Function` already has a stable `gamgee.io/v1alpha1` resource envelope and lifecycle contract; today its adapter targets SpinKube and KEDA HTTP. The adapter can be replaced later without changing the user's function intent. Machine and managed-service resource drivers remain planned.
 
 ### AI architecture
 
@@ -470,6 +480,8 @@ An apply request is rejected unless the plan hash still matches, apply is enable
 | GET | /v1/tower/workspaces | Lists Capsule tenants visible to the Control Tower. |
 | POST | /v1/tower/workspaces | Creates a workspace/Tenant with production and staging namespaces. |
 | GET | /v1/tower/workspaces/{workspace}/apps | Lists GAMGEE-managed application Deployments in production. |
+| GET | /v1/tower/workspaces/{workspace}/functions | Lists GAMGEE-managed WebAssembly Functions and observed runtime state. |
+| DELETE | /v1/tower/workspaces/{workspace}/functions/{function_name} | Deletes the Function and its GAMGEE-managed SpinKube/KEDA resources. |
 | POST | /v1/tower/workspaces/{workspace}/apps | Compiles and applies a stateless application. |
 | POST | /v1/tower/workspaces/{workspace}/apps/{app}/scale | Changes replica count from 0 to 20; scaling to zero records the previous positive replica count. |
 | POST | /v1/tower/workspaces/{workspace}/apps/{app}/resume | Restores the last positive replica count (bounded to 1–20). |
@@ -503,6 +515,42 @@ Optional TLS-backed public route fields:
 
 The hostname and TLS secret must be supplied together. The secret must already exist in the target production namespace and must be type kubernetes.io/tls with tls.crt and tls.key data. GAMGEE verifies this before applying the route. An application with neither field remains private behind a ClusterIP Service. When updating an existing app, GAMGEE refuses to adopt same-named Deployment, Service or Ingress resources unless they carry GAMGEE's managed-by label and matching workspace label.
 
+### Native Functions
+
+A GAMGEE Function is a versioned Spin WebAssembly artifact, not a general Docker container. Build and publish the Spin application with the Spin toolchain, then pass the resulting registry reference to GAMGEE. The Function Cloud profile installs Spin Operator, the node-level Wasm shim/runtime class and the KEDA HTTP Add-on.
+
+Create or update a Function through the canonical Resource API:
+
+```json
+{
+  "workspace": "acme",
+  "spec": {
+    "name": "thumbnail",
+    "image": "ghcr.io/example/thumbnail:v1.0.0",
+    "path": "/resize",
+    "min_replicas": 0,
+    "max_replicas": 8,
+    "concurrency": 40,
+    "cooldown_seconds": 120
+  }
+}
+```
+
+    curl -sS -X POST "$GAMGEE_URL/v1/resources/functions" \
+      -H "Authorization: Bearer $GAMGEE_API_TOKEN" \
+      -H "Content-Type: application/json" \
+      -H "Idempotency-Key: thumbnail-v1" \
+      -d '{"workspace":"acme","spec":{"name":"thumbnail","image":"ghcr.io/example/thumbnail:v1.0.0","path":"/resize","min_replicas":0,"max_replicas":8,"concurrency":40,"cooldown_seconds":120}}'
+
+    curl -sS "$GAMGEE_URL/v1/tower/workspaces/acme/functions" \
+      -H "Authorization: Bearer $GAMGEE_API_TOKEN"
+
+The API returns a resource ID and operation ID. The Resource Engine applies a SpinApp and KEDA HTTP route; KEDA scales the Spin workload between the configured minimum and maximum based on concurrent HTTP requests. A minimum of zero enables scale-to-zero. Internal callers use the returned proxy URL so traffic passes through the interceptor rather than bypassing autoscaling.
+
+Functions are private to the cluster by default. To publish one externally, set both `hostname` and `tls_secret` in the Function spec. The TLS Secret must already exist in the shared `keda` namespace because the ingress routes to the shared KEDA interceptor there—not in the tenant namespace. GAMGEE validates the Secret type and key names before applying the ingress.
+
+**Current Function boundary:** only prebuilt Spin/WASM OCI artifacts and HTTP request routing are supported. The schema does not accept source code, arbitrary commands, raw manifests, environment variables, secret mounts or volumes. Queue/NATS triggers, schedules, event subscriptions, build pipelines, private-registry credential lifecycle, invocation logs/traces and per-function cost reporting are not implemented yet. Nodes must have the Spin shim installed; the current Function Cloud installer labels existing nodes, and new worker nodes may need the `spin=true` label before they can host Spin Functions.
+
 ### Example API calls
 
     export GAMGEE_API_TOKEN="$(sudo cat control-tower/.tower-token)"
@@ -534,12 +582,16 @@ The interactive API schema is available at <http://127.0.0.1:8091/docs>.
 
 The Resource Engine is the desired-state layer behind Applications. It introduces a versioned GAMGEE resource envelope, a persistent desired/observed state store, generation tracking, operation records, idempotency keys, append-only resource events, and a background reconciliation worker.
 
-The first registered driver is **Application → Kubernetes**. The engine continues observing a workload while it is progressing, and periodically re-applies ready resources to repair drift. The driver compiles the typed application specification into GAMGEE-owned Deployment, Service and optional Ingress resources. It checks both workspace ownership and the unique GAMGEE resource ID before changing or deleting an existing object. The HTTP request stores intent and returns an operation ID; it does not wait for Kubernetes convergence. Transient failures are recorded and retried with bounded exponential backoff. Deletion stays pending until the driver observes the owned Kubernetes objects are gone.
+The registered drivers are **Application → Kubernetes** and **Function → SpinKube + KEDA HTTP**. The engine continues observing workloads while they are progressing, periodically reconciles ready resources to repair drift, records generation-scoped operations, and retries transient errors with bounded exponential backoff. HTTP requests store intent and return an operation ID rather than waiting for Kubernetes convergence.
+
+The Application driver compiles a typed specification into GAMGEE-owned Deployment, Service and optional Ingress resources. The Function driver compiles a typed specification into a SpinApp, a tokenless per-function ServiceAccount, a KEDA InterceptorRoute, an ExternalName proxy Service and a KEDA ScaledObject. A public Function optionally adds a TLS-backed Ingress in the shared `keda` namespace. The driver checks tenant/resource ownership before modifying or deleting GAMGEE resources. Function requests are sent through the KEDA interceptor so HTTP concurrency metrics can drive scale-up and scale-to-zero. Deletion remains pending until the driver verifies the GAMGEE control resources are gone.
 
 Resource API:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/v1/resources/applications` | Create or update a versioned GAMGEE Application resource. Accepts optional `Idempotency-Key`. |
+| POST | `/v1/resources/functions` | Create or update a native GAMGEE WebAssembly Function resource. Accepts optional `Idempotency-Key`. |
+| GET | `/v1/resources?kind=Function` | List Function resources and their desired/observed state. |
 | GET | `/v1/resources` | List resources, optionally filtered by workspace and kind. |
 | GET | `/v1/resources/{resource_id}` | Read desired state and observed status (workspace query required). |
 | GET | `/v1/resources/{resource_id}/operations` | Read generation-scoped operations and retry status. |
@@ -561,7 +613,7 @@ Application resource example:
 }
 ```
 
-The canonical API version is `gamgee.io/v1alpha1`. The current release registers only the `Application` kind. Function, Machine, Service, Workspace, Route and Secret are planned resource kinds, not falsely advertised as operational drivers.
+The canonical API version is `gamgee.io/v1alpha1`. The current release registers `Application` and `Function` kinds. Machine, Service, Workspace, Route and Secret remain planned resource kinds without operational drivers.
 
 All Application mutations accept an optional `Idempotency-Key` header (create/update, scale/stop, resume, restart and delete). Keys are scoped to the workspace and limited to 128 characters. Repeating the same key and same intent returns the original resource/operation; reusing a key for a different intent returns HTTP 409. Restart keys are deterministically mapped to a restart token so a retried restart request does not create another rollout.
 
