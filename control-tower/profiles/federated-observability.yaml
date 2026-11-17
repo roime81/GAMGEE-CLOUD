@@ -10,6 +10,7 @@ resources:
   minimum_ram_gib: 4
   minimum_disk_gib: 80
 required_tools: [ansible-playbook]
+artifacts: [platform/observability/vmks-values.yaml]
 steps:
   - executor: ansible-playbook
     playbook: automation/ansible/federated-observability.yml
