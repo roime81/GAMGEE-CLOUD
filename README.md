@@ -34,7 +34,7 @@ Those systems expose a large amount of infrastructure machinery because their pr
 | Reconcile, do not script per user | GAMGEE translates a typed intent into controlled operations. It does not let prompts produce arbitrary shell commands or unreviewed infrastructure manifests. |
 | Open-source engines, owned experience | K3s, Capsule, Traefik, Incus, KEDA, OpenTofu and other upstream engines are used where they are good at their jobs. GAMGEE avoids reimplementing them. |
 | Replaceable adapters | A runtime, hypervisor, storage engine or cloud provider can change behind the GAMGEE resource contract without forcing users to learn a new product. |
-| Safe by default | Private application networking, explicit public exposure, resource limits, token-protected administration, reviewed plans and bounded execution are defaults. |
+| Safe by default | Private application/function networking, explicit public exposure, resource limits, token-protected administration, reviewed plans and bounded execution are defaults. |
 | Small operational footprint | A local database and a single Control Tower service are enough for the current starter deployment. More services are not added without a concrete operational reason. |
 | AI is an assistant, not root | AI can interpret requests and prepare proposals. Deterministic validation, policy, approval and the reconciler decide what is allowed to change. |
 
@@ -337,6 +337,8 @@ The original server remains a control-plane dependency and a single point of fai
 
 ### Current deployment topology
 
+See [docs/architecture.md](docs/architecture.md) for the detailed control-plane, resource lifecycle and Function request/scaling diagrams.
+
     Browser
        |
     127.0.0.1:8091
@@ -381,7 +383,7 @@ The original server remains a control-plane dependency and a single point of fai
 | control-tower/tower/planner.py | Host preflight, resource estimates, source checksums and plan fingerprint. |
 | control-tower/tower/runner.py | Serialized execution of repository-owned Ansible playbooks. |
 | control-tower/tower/store.py | SQLite persistence for installation jobs and bounded execution logs. |
-| control-tower/tower/static/index.html | White-theme guided GAMGEE workspace UI. |
+| control-tower/tower/static/index.html | White-theme guided GAMGEE workspace UI for workspaces, Applications and Functions. |
 | control-tower/profiles/ | Seven internal installation bundle definitions. |
 | automation/ansible/ | Repository-owned host/platform installation playbooks. |
 | automation/opentofu/ | Hybrid cloud OpenTofu integration scaffold. |
@@ -580,7 +582,7 @@ The interactive API schema is available at <http://127.0.0.1:8091/docs>.
 
 ## 7.1 GAMGEE Resource Engine
 
-The Resource Engine is the desired-state layer behind Applications. It introduces a versioned GAMGEE resource envelope, a persistent desired/observed state store, generation tracking, operation records, idempotency keys, append-only resource events, and a background reconciliation worker.
+The Resource Engine is the desired-state layer behind Applications and Functions. It introduces a versioned GAMGEE resource envelope, a persistent desired/observed state store, generation tracking, operation records, idempotency keys, append-only resource events, and a background reconciliation worker.
 
 The registered drivers are **Application → Kubernetes** and **Function → SpinKube + KEDA HTTP**. The engine continues observing workloads while they are progressing, periodically reconciles ready resources to repair drift, records generation-scoped operations, and retries transient errors with bounded exponential backoff. HTTP requests store intent and return an operation ID rather than waiting for Kubernetes convergence.
 
@@ -615,7 +617,7 @@ Application resource example:
 
 The canonical API version is `gamgee.io/v1alpha1`. The current release registers `Application` and `Function` kinds. Machine, Service, Workspace, Route and Secret remain planned resource kinds without operational drivers.
 
-All Application mutations accept an optional `Idempotency-Key` header (create/update, scale/stop, resume, restart and delete). Keys are scoped to the workspace and limited to 128 characters. Repeating the same key and same intent returns the original resource/operation; reusing a key for a different intent returns HTTP 409. Restart keys are deterministically mapped to a restart token so a retried restart request does not create another rollout.
+All Application mutations and Function create/update/delete requests accept an optional `Idempotency-Key` header. Keys are scoped to the workspace and limited to 128 characters. Repeating the same key and same intent returns the original resource/operation; reusing a key for a different intent returns HTTP 409. Application restart keys are deterministically mapped to a restart token so a retried restart request does not create another rollout.
 
 The local reconciler runs in the Control Tower process. SQLite is the current single-node state backend. The reconciler is a single in-process worker; run one Uvicorn worker only while using the local SQLite state backend. The schema is designed to keep desired state, observed state, operations and events separate; multi-replica Control Tower deployment will require a shared transactional database and distributed worker coordination before enabling multiple reconcilers.
 
@@ -631,8 +633,11 @@ Security is a design requirement, not a checkbox profile.
 - Installation apply is plan-hash checked and explicitly approved.
 - Installation execution is restricted to repository-owned Ansible playbooks.
 - The Kubernetes adapter uses a fixed executable and argument arrays; it does not use a shell.
-- Workspace and application inputs are strongly typed and reject unknown fields.
-- Application names and workspace names are DNS-validated.
+- Workspace, Application and Function inputs are strongly typed and reject unknown fields.
+- Application, Function and workspace names are DNS-validated.
+- Function artifact references must be registry-qualified and versioned or digest-pinned; `:latest` is rejected.
+- Function pods use a dedicated ServiceAccount with automatic token mounting disabled and fixed CPU/memory bounds.
+- KEDA Function routes cap pending cold-start requests at 100 per interceptor replica.
 - The app compiler does not accept arbitrary commands, volumes, host paths, capabilities, service accounts or container security-context overrides.
 - Existing same-named Deployment, Service and Ingress resources must have GAMGEE ownership and workspace labels before an update or delete is permitted.
 - A public route is created only after checking that the referenced in-namespace Secret is type kubernetes.io/tls and contains tls.crt and tls.key.
@@ -655,7 +660,9 @@ Security is a design requirement, not a checkbox profile.
 9. **Audit depth:** installation jobs are persisted. A complete immutable audit trail for every workspace/app operation, user identity, model invocation and policy decision remains future work.
 10. **Backups and disaster recovery:** SQLite, K3s state, application state and AI Factory data do not yet have a complete automated backup/restore workflow.
 11. **High availability:** the starter architecture has one K3s server. Worker nodes do not remove this control-plane single point of failure.
-12. **Compliance:** no regulatory or certification claim is made by this repository.
+12. **Function runtime scope:** only published Spin/WASM OCI artifacts and HTTP request scaling are implemented. The API does not yet support source builds, queue/schedule triggers, user secrets, volume bindings, private-registry credential lifecycle or invocation tracing.
+13. **Function TLS and node scheduling:** public Function TLS secrets must be pre-created in the shared `keda` namespace; DNS and certificate issuance are not automated. Newly joined workers may need the `spin=true` label before they can host Functions.
+14. **Compliance:** no regulatory or certification claim is made by this repository.
 
 Do not use this preview to host sensitive or regulated production workloads until the relevant gaps have been addressed, independently tested and reviewed.
 
