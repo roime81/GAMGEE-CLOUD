@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hmac
 import re
+from pathlib import Path
 from typing import Literal
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
@@ -19,7 +20,8 @@ from tower.cluster import (
     get_json,
     run_kubectl,
 )
-from tower.config import STATIC_DIR, settings
+from tower.config import ROOT, STATIC_DIR, settings
+from tower.recommendation import ai_factory_ready, recommend_local_bundle
 from tower.planner import build_plan
 from tower.runner import execute_job
 from tower.store import JobStore
@@ -170,6 +172,15 @@ def cloud_status():
             for node in nodes
         ],
     }
+
+
+@app.get("/v1/tower/cloud/recommendation", dependencies=[Depends(require_token)])
+def cloud_recommendation():
+    """Choose the local cloud capabilities that this host can actually support."""
+    return recommend_local_bundle(
+        kvm_available=Path("/dev/kvm").exists(),
+        ai_available=ai_factory_ready(ROOT),
+    )
 
 
 @app.get("/v1/tower/profiles", dependencies=[Depends(require_token)])

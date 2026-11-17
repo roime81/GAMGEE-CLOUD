@@ -10,6 +10,7 @@ This guide describes the current engineering preview. The Control Tower now incl
 - deterministic stateless application compilation into Deployment, Service and optional TLS-backed Ingress
 - application list, scale/stop, restart and delete operations
 - cluster node status
+- host-aware local bundle recommendation (Core + Functions + Security + local Observability; KVM-backed IaaS and AI are added when ready)
 - a K3s worker join script
 
 This is a meaningful vertical slice, not a claim of a complete cloud operating system. Review the root README capability matrix and security limitations.
@@ -65,6 +66,7 @@ There is one installation-level administrator token. There is no per-user OIDC, 
 - GET /readyz
 - GET /v1/tower/capabilities
 - GET /v1/tower/cloud/status
+- GET /v1/tower/cloud/recommendation
 
 ### Installation
 
@@ -86,6 +88,10 @@ Apply body:
       "mode":"apply",
       "approved":true
     }
+
+### Local cloud recommendation
+
+GET /v1/tower/cloud/recommendation returns the automatically selected local profile set plus included/skipped reasons. It always includes Core, Function, Security and local Observability foundations. It includes Private IaaS only when /dev/kvm exists. It includes AI Enterprise only when Docker Compose v2, a running Docker daemon and the required configured secrets in the repository .env are detected. Hybrid is omitted because its current provider adapter is only a scaffold.
 
 ### Workspace
 
