@@ -72,7 +72,14 @@ class ResourceEngine:
                 else:
                     observed = driver.reconcile(resource)
                 deleted = bool(resource["desired"].get("deleted"))
-                if not deleted and observed.get("state") == "progressing":
+                if deleted and observed.get("state") != "deleted":
+                    self.store.mark_progress(
+                        resource_id=resource["id"],
+                        generation=resource["generation"],
+                        observed=observed,
+                        phase="deleting",
+                    )
+                elif not deleted and observed.get("state") == "progressing":
                     self.store.mark_progress(
                         resource_id=resource["id"],
                         generation=resource["generation"],
