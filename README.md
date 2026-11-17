@@ -335,6 +335,25 @@ The original server remains a control-plane dependency and a single point of fai
 
 ## 6. Architecture and implementation
 
+### GAMGEE high-level architecture
+
+The diagram below is the product-level view of GAMGEE Cloud OS. It shows the intended separation between the human-facing experience, the Control Tower, the desired-state Resource Engine, the runtime layer and the infrastructure underneath. Installation profiles and ecosystem integrations sit alongside the core platform, while enterprise capabilities cut across the stack.
+
+![GAMGEE Cloud OS — high-level architecture](docs/images/gamgee-high-level-architecture.svg)
+
+**Architecture flow**
+
+1. **User Experience** — the GAMGEE UI, natural-language assistant, app/function launch, topology/monitoring and management experience.
+2. **GAMGEE Control Tower** — coordinates the Resource Engine, AI planning, security policy, observability and FinOps.
+3. **GAMGEE Resource Engine** — accepts resource intent through the Resource API, persists desired state, reconciles observed state and delegates execution to drivers.
+4. **GAMGEE Runtime Layer** — hosts applications, native functions, virtual machines, services, AI services and data/storage capabilities.
+5. **Infrastructure** — starts on one VM and can extend to multiple compute nodes or hybrid environments.
+
+The side panels represent one-click installation profiles, integration points (cloud providers, OCI containers, Kubernetes, OpenStack and MCP/modern APIs) and enterprise-wide capabilities such as security, multi-tenancy, observability, backup/recovery and FinOps.
+
+> **Design intent, not a blanket implementation claim:** this is the target product architecture. Individual capabilities are delivered incrementally; see the release status, capability matrix, security limitations and roadmap below for what is implemented today versus planned.
+
+
 ### Current deployment topology
 
 See [docs/architecture.md](docs/architecture.md) for the detailed control-plane, resource lifecycle and Function request/scaling diagrams.
