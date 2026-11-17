@@ -37,6 +37,19 @@ jobs:
           for script in scripts/*.sh; do
             bash -n "$script"
           done
+      - name: Check GAMGEE browser JavaScript syntax
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          html = Path("control-tower/tower/static/index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script>(.*?)</script>", html, flags=re.DOTALL)
+          if len(scripts) != 1:
+              raise SystemExit(f"Expected one inline script, found {len(scripts)}")
+          Path("/tmp/gamgee-ui.js").write_text(scripts[0], encoding="utf-8")
+          PY
+          node --check /tmp/gamgee-ui.js
       - name: Check Ansible playbook syntax
         run: |
           for playbook in automation/ansible/*.yml; do
