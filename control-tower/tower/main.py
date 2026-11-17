@@ -73,8 +73,14 @@ def _store() -> JobStore:
     return JobStore(settings.database_path)
 
 
+_RESOURCE_STORE_INSTANCE: ResourceStore | None = None
+
+
 def _resource_store() -> ResourceStore:
-    return ResourceStore(settings.database_path)
+    global _RESOURCE_STORE_INSTANCE
+    if _RESOURCE_STORE_INSTANCE is None:
+        _RESOURCE_STORE_INSTANCE = ResourceStore(settings.database_path)
+    return _RESOURCE_STORE_INSTANCE
 
 
 def _resource_engine() -> ResourceEngine:
@@ -83,8 +89,12 @@ def _resource_engine() -> ResourceEngine:
 
 def _application_resource(workspace: str, name: str) -> dict:
     resource = _resource_store().find("Application", workspace, name)
-    if resource is None or resource["phase"] == "deleted":
-        raise HTTPException(status_code=404, detail="GAMGEE Application resource not found.")
+    if (
+        resource is None
+        or resource["phase"] in {"deleted", "deleting"}
+        or resource["desired"].get("deleted")
+    ):
+        raise HTTPException(status_code=404, detail="GAMGEE Application resource not found or deletion has already started.")
     return resource
 
 
@@ -424,6 +434,8 @@ def delete_resource(
         )
     except IdempotencyConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if resource is None:
         raise HTTPException(status_code=404, detail="GAMGEE resource not found.")
     return {
@@ -507,7 +519,10 @@ def list_apps(workspace: str):
                 "desired_replicas": desired.get("replicas", 1),
                 "ready_replicas": observed.get("ready_replicas", 0),
                 "available_replicas": observed.get("available_replicas", 0),
-                "status": "error" if phase == "error" else observed.get("state", phase),
+                "status": (
+                    phase if phase in {"pending", "reconciling", "deleting", "error"}
+                    else observed.get("state", phase)
+                ),
                 "last_error": resource["last_error"],
             }
         )
