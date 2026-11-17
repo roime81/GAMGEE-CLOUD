@@ -529,8 +529,11 @@ class ResourceStore:
         generation: int,
         observed: dict[str, Any],
         poll_seconds: int = 5,
+        phase: str = "progressing",
     ) -> None:
-        """Persist an applied-but-not-ready observation and schedule another status check."""
+        """Persist a non-terminal observation and schedule another reconciliation pass."""
+        if phase not in {"progressing", "deleting"}:
+            raise ValueError("A progress phase must be 'progressing' or 'deleting'.")
         now_dt = utc_now()
         now = _stamp(now_dt)
         next_attempt = _stamp(now_dt + timedelta(seconds=max(2, min(poll_seconds, 30))))
@@ -549,16 +552,31 @@ class ResourceStore:
                     "UPDATE resources SET phase='pending', next_attempt_at=?, updated_at=? WHERE id=?",
                     (now, now, resource_id),
                 )
+                connection.execute(
+                    """
+                    UPDATE resource_operations SET status='superseded', updated_at=?
+                    WHERE resource_id=? AND generation=?
+                    """,
+                    (now, resource_id, generation),
+                )
+                self._record_event(
+                    connection,
+                    resource_id,
+                    generation,
+                    "reconcile.superseded",
+                    {"current_generation": current_generation},
+                    now,
+                )
                 connection.commit()
                 return
             changed = json.loads(row["observed_json"]) != observed
             connection.execute(
                 """
                 UPDATE resources SET observed_json=?, observed_generation=?,
-                    phase='progressing', retry_count=0, next_attempt_at=?,
+                    phase=?, retry_count=0, next_attempt_at=?,
                     last_error=NULL, updated_at=? WHERE id=?
                 """,
-                (_canonical(observed), generation, next_attempt, now, resource_id),
+                (_canonical(observed), generation, phase, next_attempt, now, resource_id),
             )
             connection.execute(
                 """
@@ -572,7 +590,7 @@ class ResourceStore:
                     connection,
                     resource_id,
                     generation,
-                    "reconcile.progressing",
+                    "reconcile.deleting" if phase == "deleting" else "reconcile.progressing",
                     observed,
                     now,
                 )
