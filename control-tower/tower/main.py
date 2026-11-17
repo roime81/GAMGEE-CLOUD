@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
 import re
@@ -539,7 +540,12 @@ def deploy_app(
 
 
 @app.post("/v1/tower/workspaces/{workspace}/apps/{app_name}/scale", dependencies=[Depends(require_token)])
-def scale_app(workspace: str, app_name: str, request: ScaleRequest):
+def scale_app(
+    workspace: str,
+    app_name: str,
+    request: ScaleRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
     workspace = _validate_path_label(workspace, "Workspace")
     resource = _application_resource(workspace, _validate_path_label(app_name, "App name"))
     desired = dict(resource["desired"])
@@ -551,12 +557,18 @@ def scale_app(workspace: str, app_name: str, request: ScaleRequest):
         desired["_gamgee_previous_replicas"] = request.replicas
     desired["replicas"] = request.replicas
     engine = _resource_engine()
-    updated, operation_id, replayed = engine.submit(
-        kind="Application",
-        workspace=workspace,
-        name=resource["name"],
-        desired=desired,
-    )
+    try:
+        updated, operation_id, replayed = engine.submit(
+            kind="Application",
+            workspace=workspace,
+            name=resource["name"],
+            desired=desired,
+            idempotency_key=idempotency_key,
+        )
+    except IdempotencyConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "resource_id": updated["id"],
         "generation": updated["generation"],
@@ -568,7 +580,11 @@ def scale_app(workspace: str, app_name: str, request: ScaleRequest):
 
 
 @app.post("/v1/tower/workspaces/{workspace}/apps/{app_name}/resume", dependencies=[Depends(require_token)])
-def resume_app(workspace: str, app_name: str):
+def resume_app(
+    workspace: str,
+    app_name: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
     workspace = _validate_path_label(workspace, "Workspace")
     resource = _application_resource(workspace, _validate_path_label(app_name, "App name"))
     desired = dict(resource["desired"])
@@ -576,9 +592,18 @@ def resume_app(workspace: str, app_name: str):
     target = min(20, max(1, target))
     desired["replicas"] = target
     desired["_gamgee_previous_replicas"] = target
-    updated, operation_id, replayed = _resource_engine().submit(
-        kind="Application", workspace=workspace, name=resource["name"], desired=desired
-    )
+    try:
+        updated, operation_id, replayed = _resource_engine().submit(
+            kind="Application",
+            workspace=workspace,
+            name=resource["name"],
+            desired=desired,
+            idempotency_key=idempotency_key,
+        )
+    except IdempotencyConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "resource_id": updated["id"],
         "generation": updated["generation"],
@@ -590,14 +615,31 @@ def resume_app(workspace: str, app_name: str):
 
 
 @app.post("/v1/tower/workspaces/{workspace}/apps/{app_name}/restart", dependencies=[Depends(require_token)])
-def restart_app(workspace: str, app_name: str):
+def restart_app(
+    workspace: str,
+    app_name: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
     workspace = _validate_path_label(workspace, "Workspace")
     resource = _application_resource(workspace, _validate_path_label(app_name, "App name"))
     desired = dict(resource["desired"])
-    desired["_gamgee_restart_token"] = uuid.uuid4().hex
-    updated, operation_id, replayed = _resource_engine().submit(
-        kind="Application", workspace=workspace, name=resource["name"], desired=desired
+    desired["_gamgee_restart_token"] = (
+        hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
+        if idempotency_key
+        else uuid.uuid4().hex
     )
+    try:
+        updated, operation_id, replayed = _resource_engine().submit(
+            kind="Application",
+            workspace=workspace,
+            name=resource["name"],
+            desired=desired,
+            idempotency_key=idempotency_key,
+        )
+    except IdempotencyConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "resource_id": updated["id"],
         "generation": updated["generation"],
