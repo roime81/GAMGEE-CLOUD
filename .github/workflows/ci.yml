@@ -1,0 +1,39 @@
+name: GAMGEE CI
+
+on:
+  push:
+    branches: [main, feat/**]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Control Tower dependencies
+        run: python -m pip install -r control-tower/requirements.txt
+      - name: Install AI service dependencies
+        run: |
+          python -m pip install -r ai-agent/requirements.txt
+          python -m pip install -r ai-factory/requirements.txt
+      - name: Test Control Tower
+        run: PYTHONPATH=control-tower python -m unittest discover -s control-tower/tests -v
+      - name: Test AI Agent
+        working-directory: ai-agent
+        run: python -m unittest discover -s tests -v
+      - name: Test AI Factory
+        working-directory: ai-factory
+        run: python -m unittest discover -s tests -t . -v
+      - name: Check Ansible playbook syntax
+        run: |
+          for playbook in automation/ansible/*.yml; do
+            ansible-playbook -i localhost, --syntax-check "$playbook"
+          done

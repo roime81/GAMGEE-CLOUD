@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GAMGEE Control Tower</title>
+<style>
+:root{color-scheme:light;--ink:#172033;--muted:#64748b;--line:#e4eaf1;--blue:#2563eb;--pale:#f5f8fc;--green:#15803d}
+*{box-sizing:border-box}body{margin:0;background:#f7f9fc;color:var(--ink);font:14px Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+header{height:68px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 32px;position:sticky;top:0;z-index:2}
+.brand{display:flex;align-items:center;gap:11px;font-size:18px;font-weight:750;letter-spacing:.02em}.mark{width:34px;height:34px;border-radius:10px;background:var(--blue);display:grid;place-items:center;color:#fff;font-size:19px}
+.pill{border:1px solid #bbf7d0;background:#f0fdf4;color:var(--green);border-radius:99px;padding:6px 10px;font-size:12px;font-weight:650}
+main{max-width:1180px;margin:34px auto;padding:0 24px}.eyebrow{font-size:11px;letter-spacing:.13em;color:var(--blue);font-weight:750;text-transform:uppercase}
+h1{font-size:30px;margin:8px 0 5px;letter-spacing:-.035em}h2{font-size:16px;margin:0 0 14px}.sub{color:var(--muted);margin:0 0 26px;line-height:1.6}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card,.panel{background:#fff;border:1px solid var(--line);border-radius:15px;padding:18px;box-shadow:0 2px 8px #17203308}
+.card{display:flex;gap:14px;align-items:flex-start;min-height:118px}.card input{width:17px;height:17px;margin-top:4px;accent-color:var(--blue)}.card h3{margin:0 0 6px;font-size:14px}.card p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}.meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.tag{font-size:10px;color:#46566c;background:#f1f5f9;border-radius:6px;padding:4px 7px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.split{display:flex;justify-content:space-between;align-items:center;gap:12px}.actions{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+button{border:0;border-radius:9px;padding:10px 15px;font-size:13px;font-weight:650;cursor:pointer;background:var(--blue);color:#fff}button.secondary{background:#eef3fa;color:#24344d;border:1px solid var(--line)}button:disabled{opacity:.45;cursor:not-allowed}
+input[type=password]{border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:290px;background:#fff}
+.section{margin-top:22px}.muted{color:var(--muted)}.status{font-size:12px;color:var(--muted)}pre{white-space:pre-wrap;overflow:auto;background:#101827;color:#dce7f6;border-radius:10px;padding:14px;font:11px ui-monospace,monospace;max-height:310px}
+.resource-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.metric{background:var(--pale);border:1px solid var(--line);border-radius:10px;padding:12px}.metric strong{display:block;font-size:20px}.metric span{color:var(--muted);font-size:11px}
+#message{padding:11px 13px;border-radius:9px;background:#eff6ff;color:#1e40af;margin-top:12px;display:none}#message.error{background:#fff1f2;color:#be123c}#planPanel{display:none}.footer{margin:24px 0;color:#94a3b8;font-size:11px}
+@media(max-width:720px){header{padding:0 16px}main{padding:0 14px;margin:22px auto}.grid{grid-template-columns:1fr}.resource-grid{grid-template-columns:1fr}.split{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<header><div class="brand"><span class="mark">G</span>GAMGEE <span class="muted" style="font-weight:450">Control Tower</span></div><span class="pill">Local control plane</span></header>
+<main>
+<div class="eyebrow">Installation orchestration</div>
+<h1>Build your cloud foundation.</h1>
+<p class="sub">Select capabilities. GAMGEE resolves dependencies, checks the host, previews the installation and runs approved automation.</p>
+<section class="panel">
+<div class="split"><h2>Control Tower access</h2><span class="status">Token remains in this browser tab only</span></div>
+<div class="row"><input id="token" type="password" autocomplete="off" placeholder="Paste Control Tower API token"><button id="connect">Connect</button><span id="connection" class="status">Not connected</span></div>
+</section>
+<section class="section">
+<div class="split"><h2>Installation profiles</h2><span class="status">Dependencies are added automatically</span></div>
+<div class="grid" id="profiles">
+<label class="card"><input type="checkbox" value="core-cloud" checked><div><h3>Core Cloud</h3><p>K3s, tenant control, ingress, platform API and baseline services.</p><div class="meta"><span class="tag">Foundation</span><span class="tag">2 vCPU · 4 GiB</span></div></div></label>
+<label class="card"><input type="checkbox" value="function-cloud"><div><h3>Function Cloud</h3><p>Event-driven function scaling and autoscaling foundation based on KEDA.</p><div class="meta"><span class="tag">FaaS foundation</span><span class="tag">2 vCPU · 3 GiB</span></div></div></label>
+<label class="card"><input type="checkbox" value="private-iaas"><div><h3>Private IaaS</h3><p>Incus VM management, KVM checks and local virtual infrastructure.</p><div class="meta"><span class="tag">Virtualisation</span><span class="tag">2 vCPU · 4 GiB</span></div></div></label>
+<label class="card"><input type="checkbox" value="ai-enterprise"><div><h3>AI Enterprise</h3><p>Private AI Factory, local inference, RAG, PostgreSQL, Qdrant and MCP.</p><div class="meta"><span class="tag">GPU optional</span><span class="tag">8 vCPU · 24 GiB</span></div></div></label>
+<label class="card"><input type="checkbox" value="enterprise-security"><div><h3>Enterprise Security</h3><p>Kubernetes admission policy foundation using Kyverno.</p><div class="meta"><span class="tag">Policy controls</span><span class="tag">1 vCPU · 2 GiB</span></div></div></label>
+<label class="card"><input type="checkbox" value="federated-observability"><div><h3>Federated Observability</h3><p>Metrics, dashboards and cluster-level monitoring using VictoriaMetrics.</p><div class="meta"><span class="tag">Monitoring</span><span class="tag">2 vCPU · 4 GiB</span></div></div></label>
+<label class="card"><input type="checkbox" value="hybrid-cloud"><div><h3>Hybrid Cloud</h3><p>OpenTofu validation and foundations for remote provider adapters.</p><div class="meta"><span class="tag">AWS · Azure · GCP</span><span class="tag">1 vCPU · 2 GiB</span></div></div></label>
+</div>
+<div class="actions"><button id="preview">Preview installation plan</button><button id="dryrun" class="secondary" disabled>Run dry-run</button></div>
+<div id="message"></div>
+</section>
+<section class="panel section" id="planPanel">
+<div class="split"><h2>Installation plan</h2><span id="readiness" class="status"></span></div>
+<div class="resource-grid" id="resources"></div>
+<h2 style="margin-top:18px">Execution order</h2><ol id="order"></ol>
+<div id="warnings" class="muted"></div>
+<pre id="planJson"></pre>
+<div class="actions"><button id="apply" disabled>Approve and install</button><button id="refresh" class="secondary">Refresh jobs</button></div>
+</section>
+<section class="panel section"><div class="split"><h2>Recent jobs</h2><span class="status">Persistent local history</span></div><div id="jobs" class="muted">Connect to view jobs.</div></section>
+<div class="footer">GAMGEE Control Tower · White workspace · Mutating actions require server-side enablement and explicit approval.</div>
+</main>
+<script>
+let token="",currentPlan=null;
+const byId=id=>document.getElementById(id);
+function showMessage(text,error=false){byId("message").textContent=text;byId("message").className=error?"error":"";byId("message").style.display="block"}
+async function api(path,options={}){const response=await fetch(path,{...options,headers:{"Content-Type":"application/json","Authorization":"Bearer "+token,...(options.headers||{})}});const body=await response.json().catch(()=>({detail:response.statusText}));if(!response.ok)throw new Error(body.detail?.message||body.detail||response.statusText);return body}
+function selectedProfiles(){return [...document.querySelectorAll("#profiles input:checked")].map(element=>element.value)}
+byId("connect").onclick=async()=>{token=byId("token").value.trim();try{const data=await api("/v1/tower/profiles");byId("connection").textContent="Connected · "+data.profiles.length+" profiles";showMessage("Control Tower connection established.");await refreshJobs()}catch(error){token="";byId("connection").textContent="Connection failed";showMessage(String(error),true)}};
+byId("preview").onclick=async()=>{try{if(!token)throw Error("Connect first.");const data=await api("/v1/tower/plan",{method:"POST",body:JSON.stringify({profiles:selectedProfiles()})});currentPlan=data;byId("planPanel").style.display="block";byId("readiness").textContent=data.apply_ready?"Preflight passed":"Preflight has blockers or missing tools";byId("resources").innerHTML="";for(const [key,value] of Object.entries(data.required_resources)){const element=document.createElement("div");element.className="metric";element.innerHTML="<strong>"+value+"</strong><span>"+key+"</span>";byId("resources").appendChild(element)}byId("order").innerHTML="";data.ordered_profiles.forEach(profile=>{const item=document.createElement("li");item.textContent=profile;byId("order").appendChild(item)});byId("warnings").textContent=[...data.blockers,...data.warnings].join(" · ")||"No preflight warnings.";byId("planJson").textContent=JSON.stringify(data,null,2);byId("dryrun").disabled=false;byId("apply").disabled=!data.apply_ready;showMessage("Plan generated. Review dependencies and host checks before applying.")}catch(error){showMessage(String(error),true)}};
+byId("dryrun").onclick=async()=>{try{const job=await api("/v1/tower/jobs",{method:"POST",body:JSON.stringify({profiles:selectedProfiles(),plan_hash:currentPlan.plan_hash,mode:"dry-run"})});showMessage("Dry-run completed. No infrastructure was changed.");await refreshJobs()}catch(error){showMessage(String(error),true)}};
+byId("apply").onclick=async()=>{if(!currentPlan||!confirm("Apply this plan to the local host? This will install or change platform components."))return;try{const job=await api("/v1/tower/jobs",{method:"POST",body:JSON.stringify({profiles:selectedProfiles(),plan_hash:currentPlan.plan_hash,mode:"apply",approved:true})});showMessage("Installation job started: "+job.id);await refreshJobs();watchJob(job.id)}catch(error){showMessage(String(error),true)}};
+async function refreshJobs(){if(!token)return;try{const data=await api("/v1/tower/jobs");byId("jobs").innerHTML="";if(!data.jobs.length){byId("jobs").textContent="No jobs yet.";return}data.jobs.forEach(job=>{const row=document.createElement("div");row.style.cssText="padding:10px 0;border-bottom:1px solid #e4eaf1;display:flex;justify-content:space-between;gap:12px";const label=document.createElement("span");label.textContent=job.profiles.join(", ");const status=document.createElement("strong");status.textContent=job.status;row.append(label,status);byId("jobs").appendChild(row)})}catch(error){byId("jobs").textContent=String(error)}}
+function watchJob(id){const timer=setInterval(async()=>{try{const job=await api("/v1/tower/jobs/"+id);await refreshJobs();if(["succeeded","failed"].includes(job.status)){clearInterval(timer);byId("planJson").textContent=job.logs;showMessage("Job "+job.status+". Review execution output above.")}}catch(error){clearInterval(timer);showMessage(String(error),true)}},2500)}
+byId("refresh").onclick=refreshJobs;
+</script>
+</body>
+</html>

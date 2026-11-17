@@ -1,0 +1,29 @@
+---
+- name: Prepare GAMGEE Hybrid Cloud integration workspace
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Verify OpenTofu CLI
+      ansible.builtin.command:
+        argv: [tofu, version]
+      register: tofu_version
+      changed_when: false
+
+    - name: Initialise provider-neutral workspace without a backend
+      ansible.builtin.command:
+        argv: [tofu, -chdir=automation/opentofu/hybrid, init, -backend=false]
+      args:
+        chdir: "{{ playbook_dir }}/../.."
+      changed_when: false
+
+    - name: Validate the provider-neutral integration workspace
+      ansible.builtin.command:
+        argv: [tofu, -chdir=automation/opentofu/hybrid, validate]
+      args:
+        chdir: "{{ playbook_dir }}/../.."
+      changed_when: false
+
+    - name: Report hybrid integration readiness
+      ansible.builtin.debug:
+        msg: "OpenTofu workspace validated. No remote cloud resources were created."

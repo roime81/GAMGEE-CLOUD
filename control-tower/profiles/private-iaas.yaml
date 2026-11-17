@@ -1,0 +1,16 @@
+schema_version: 1
+id: private-iaas
+name: Private IaaS
+description: Single-host Incus and KVM virtual machine foundation. Guest workloads require additional capacity.
+implementation: executable-foundation
+depends_on: [core-cloud]
+components: [incus, qemu-kvm, local-bridge, vm-images]
+resources:
+  minimum_vcpu: 2
+  minimum_ram_gib: 4
+  minimum_disk_gib: 50
+required_tools: [ansible-playbook]
+steps:
+  - executor: ansible-playbook
+    playbook: automation/ansible/private-iaas.yml
+    timeout_seconds: 1200

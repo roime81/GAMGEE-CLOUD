@@ -1,0 +1,54 @@
+---
+- name: Install GAMGEE Enterprise Security baseline
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+  vars:
+    kyverno_chart_version: "3.9.2"
+  tasks:
+    - name: Verify Kubernetes is available
+      ansible.builtin.command:
+        argv: [kubectl, get, nodes]
+      changed_when: false
+
+    - name: Add Kyverno Helm repository
+      ansible.builtin.command:
+        argv:
+          - helm
+          - repo
+          - add
+          - kyverno
+          - https://kyverno.github.io/kyverno/
+      register: kyverno_repo
+      changed_when: "'has been added' in kyverno_repo.stdout or 'has been added' in kyverno_repo.stderr"
+      failed_when: kyverno_repo.rc != 0 and 'already exists' not in (kyverno_repo.stderr | lower)
+
+    - name: Refresh Helm repositories
+      ansible.builtin.command:
+        argv: [helm, repo, update]
+      changed_when: false
+
+    - name: Install or upgrade Kyverno
+      ansible.builtin.command:
+        argv:
+          - helm
+          - upgrade
+          - --install
+          - kyverno
+          - kyverno/kyverno
+          - --version
+          - "{{ kyverno_chart_version }}"
+          - --namespace
+          - kyverno
+          - --create-namespace
+          - --wait
+          - --timeout
+          - 10m
+      register: kyverno_install
+      changed_when: "'has been upgraded' in kyverno_install.stdout or 'has been installed' in kyverno_install.stdout"
+
+    - name: Verify Kyverno admission controller
+      ansible.builtin.command:
+        argv: [kubectl, rollout, status, deployment/kyverno-admission-controller, -n, kyverno, --timeout=180s]
+      changed_when: false

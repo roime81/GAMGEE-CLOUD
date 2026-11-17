@@ -1,0 +1,56 @@
+---
+- name: Install GAMGEE Federated Observability local metrics stack
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+  vars:
+    victoria_metrics_chart_version: "0.98.1"
+  tasks:
+    - name: Verify Kubernetes is available
+      ansible.builtin.command:
+        argv: [kubectl, get, nodes]
+      changed_when: false
+
+    - name: Add VictoriaMetrics Helm repository
+      ansible.builtin.command:
+        argv:
+          - helm
+          - repo
+          - add
+          - victoria-metrics
+          - https://victoriametrics.github.io/helm-charts/
+      register: vm_repo
+      changed_when: "'has been added' in vm_repo.stdout or 'has been added' in vm_repo.stderr"
+      failed_when: vm_repo.rc != 0 and 'already exists' not in (vm_repo.stderr | lower)
+
+    - name: Refresh Helm repositories
+      ansible.builtin.command:
+        argv: [helm, repo, update]
+      changed_when: false
+
+    - name: Install or upgrade VictoriaMetrics Kubernetes stack
+      ansible.builtin.command:
+        argv:
+          - helm
+          - upgrade
+          - --install
+          - gamgee-observability
+          - victoria-metrics/victoria-metrics-k8s-stack
+          - --version
+          - "{{ victoria_metrics_chart_version }}"
+          - --namespace
+          - gamgee-observability
+          - --create-namespace
+          - --values
+          - "{{ playbook_dir }}/../../platform/observability/vmks-values.yaml"
+          - --wait
+          - --timeout
+          - 15m
+      register: vm_install
+      changed_when: "'has been upgraded' in vm_install.stdout or 'has been installed' in vm_install.stdout"
+
+    - name: Verify VictoriaMetrics stack release
+      ansible.builtin.command:
+        argv: [helm, status, gamgee-observability, -n, gamgee-observability]
+      changed_when: false

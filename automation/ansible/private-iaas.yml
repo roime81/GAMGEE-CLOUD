@@ -1,0 +1,50 @@
+---
+- name: Install GAMGEE Private IaaS foundation
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify supported distribution
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: "Incus package installation is automated only for Debian-family hosts."
+
+    - name: Verify hardware virtualisation is available
+      ansible.builtin.stat:
+        path: /dev/kvm
+      register: kvm_device
+
+    - name: Require KVM for VM capability
+      ansible.builtin.assert:
+        that: [kvm_device.stat.exists]
+        fail_msg: "KVM is unavailable. Enable hardware or nested virtualisation and expose /dev/kvm before installing Private IaaS."
+
+    - name: Install Incus and QEMU
+      ansible.builtin.apt:
+        name:
+          - incus
+          - qemu-system-x86
+          - qemu-utils
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Check whether an Incus default profile exists
+      ansible.builtin.command:
+        argv: [incus, profile, show, default]
+      register: incus_default_profile
+      changed_when: false
+      failed_when: false
+
+    - name: Initialise Incus with non-interactive defaults
+      ansible.builtin.command:
+        argv: [incus, admin, init, --auto]
+      when: incus_default_profile.rc != 0
+      changed_when: true
+
+    - name: Verify Incus daemon
+      ansible.builtin.command:
+        argv: [incus, info]
+      changed_when: false

@@ -1,0 +1,16 @@
+schema_version: 1
+id: hybrid-cloud
+name: Hybrid Cloud
+description: Validates the OpenTofu integration workspace and prepares provider configuration. It does not create remote cloud resources until a separate reviewed workspace is configured.
+implementation: integration-scaffold
+depends_on: [core-cloud, enterprise-security, federated-observability]
+components: [opentofu, aws-adapter-point, azure-adapter-point, gcp-adapter-point, remote-kubernetes-adapter-point]
+resources:
+  minimum_vcpu: 1
+  minimum_ram_gib: 2
+  minimum_disk_gib: 10
+required_tools: [ansible-playbook, tofu]
+steps:
+  - executor: ansible-playbook
+    playbook: automation/ansible/hybrid-cloud.yml
+    timeout_seconds: 600

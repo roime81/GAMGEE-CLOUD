@@ -1,0 +1,16 @@
+schema_version: 1
+id: core-cloud
+name: Core Cloud
+description: GAMGEE control-plane foundation, single-node K3s, tenant management, ingress and baseline cost visibility.
+implementation: executable
+depends_on: []
+components: [k3s, capsule, traefik, opencost, control-tower-api]
+resources:
+  minimum_vcpu: 2
+  minimum_ram_gib: 4
+  minimum_disk_gib: 40
+required_tools: [ansible-playbook, bash]
+steps:
+  - executor: ansible-playbook
+    playbook: automation/ansible/core-cloud.yml
+    timeout_seconds: 1800

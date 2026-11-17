@@ -1,0 +1,46 @@
+---
+- name: Install GAMGEE Core Cloud
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+  vars:
+    gamgee_repo_root: "{{ playbook_dir }}/../.."
+  tasks:
+    - name: Verify supported operating system
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+          - ansible_distribution in ["Ubuntu", "Debian"]
+        fail_msg: "GAMGEE Core Cloud currently supports Ubuntu and Debian hosts."
+
+    - name: Run the repository's idempotent K3s platform bootstrap
+      ansible.builtin.command:
+        argv:
+          - bash
+          - scripts/bootstrap.sh
+        chdir: "{{ gamgee_repo_root }}"
+      register: bootstrap_result
+      changed_when: "'Bootstrap complete' in bootstrap_result.stdout"
+
+    - name: Verify Kubernetes API is ready
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - get
+          - nodes
+          - --no-headers
+      register: node_result
+      changed_when: false
+      retries: 20
+      delay: 6
+      until: node_result.rc == 0 and (node_result.stdout | trim | length) > 0
+
+    - name: Verify Capsule tenant CRD exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - get
+          - crd
+          - tenants.capsule.clastix.io
+      changed_when: false
