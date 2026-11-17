@@ -4,6 +4,8 @@
   connection: local
   become: true
   gather_facts: false
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   vars:
     keda_chart_version: "2.20.0"
   tasks:
