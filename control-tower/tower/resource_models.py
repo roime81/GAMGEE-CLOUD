@@ -13,7 +13,7 @@ SUPPORTED_RESOURCE_KINDS = ("Application", "Function")
 PLANNED_RESOURCE_KINDS = ("Machine", "Service", "Workspace", "Route", "Secret")
 
 _DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
-_IMAGE_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,253}$")
+_IMAGE_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,253}$")
 _SHA256_DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
 
 
