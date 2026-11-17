@@ -9,7 +9,7 @@ resources:
   minimum_vcpu: 1
   minimum_ram_gib: 2
   minimum_disk_gib: 10
-required_tools: [ansible-playbook, helm, kubectl]
+required_tools: [ansible-playbook]
 steps:
   - executor: ansible-playbook
     playbook: automation/ansible/enterprise-security.yml
