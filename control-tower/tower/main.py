@@ -24,6 +24,7 @@ from tower.planner import build_plan
 from tower.runner import execute_job
 from tower.store import JobStore
 from tower.lifecycle import resume_replicas
+from tower.resource_guard import is_gamgee_managed
 from tower.workloads import (
     ScaleRequest,
     WorkloadRequest,
@@ -72,6 +73,21 @@ def _validate_path_label(value: str, kind: str) -> str:
     if not _DNS_LABEL.fullmatch(value):
         raise HTTPException(status_code=422, detail=f"{kind} must be a lowercase DNS label.")
     return value
+
+
+def _existing_resource(resource: str, name: str, namespace: str, workspace: str) -> dict | None:
+    try:
+        item = get_json(resource, name, namespace=namespace)
+    except ClusterNotFound:
+        return None
+    except ClusterError as exc:
+        raise _cluster_failure(exc) from exc
+    if not is_gamgee_managed(item, workspace):
+        raise HTTPException(
+            status_code=409,
+            detail=f"{resource} '{name}' already exists but is not managed by GAMGEE in this workspace.",
+        )
+    return item
 
 
 def _workspace_namespace(workspace: str) -> str:
@@ -312,7 +328,27 @@ def list_apps(workspace: str):
 @app.post("/v1/tower/workspaces/{workspace}/apps", status_code=201, dependencies=[Depends(require_token)])
 def deploy_app(workspace: str, request: WorkloadRequest):
     namespace = _workspace_namespace(workspace)
+
+    # Never adopt or overwrite same-named resources created outside GAMGEE.
+    for resource in ("deployment.apps", "service"):
+        _existing_resource(resource, request.name, namespace, workspace)
+    existing_ingress = _existing_resource("ingress", request.name, namespace, workspace)
+
+    if request.tls_secret:
+        try:
+            secret = get_json("secret", request.tls_secret, namespace=namespace)
+        except ClusterNotFound as exc:
+            raise HTTPException(status_code=409, detail="The referenced TLS Secret does not exist in this workspace.") from exc
+        except ClusterError as exc:
+            raise _cluster_failure(exc) from exc
+        if secret.get("type") != "kubernetes.io/tls" or not {"tls.crt", "tls.key"}.issubset(secret.get("data", {})):
+            raise HTTPException(status_code=422, detail="The referenced Secret must be a valid kubernetes.io/tls Secret containing tls.crt and tls.key.")
+
     try:
+        if not request.hostname and existing_ingress:
+            # Removing public access is fail-closed: remove the prior GAMGEE route
+            # before applying the private-only application resources.
+            run_kubectl(["delete", f"ingress/{request.name}", "--namespace", namespace, "--ignore-not-found=true"])
         apply_objects(build_workload_objects(workspace, request))
     except ClusterError as exc:
         raise _cluster_failure(exc) from exc
@@ -376,6 +412,8 @@ def restart_app(workspace: str, app_name: str):
 @app.delete("/v1/tower/workspaces/{workspace}/apps/{app_name}", dependencies=[Depends(require_token)])
 def delete_app(workspace: str, app_name: str):
     namespace, _ = _managed_deployment(workspace, app_name)
+    for resource in ("service", "ingress"):
+        _existing_resource(resource, app_name, namespace, workspace)
     try:
         delete_gamgee_app(app_name, namespace)
     except ClusterError as exc:
