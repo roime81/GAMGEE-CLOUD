@@ -341,6 +341,8 @@ The diagram below is the product-level view of GAMGEE Cloud OS. It shows the int
 
 ![GAMGEE Cloud OS — high-level architecture](docs/images/gamgee-high-level-architecture.svg)
 
+[Open the architecture diagram directly](docs/images/gamgee-high-level-architecture.svg)
+
 **Architecture flow**
 
 1. **User Experience** — the GAMGEE UI, natural-language assistant, app/function launch, topology/monitoring and management experience.
