@@ -184,6 +184,148 @@ Then open <http://127.0.0.1:8091> on your workstation.
 
 Do not open the Control Tower port to the public Internet. The current release uses one installation-level administrator token rather than per-person OIDC authentication and fine-grained administrator roles.
 
+### Deployment topologies and network plan
+
+GAMGEE has four deployment patterns to plan for. The first two are supported by the current engineering preview. AWS EKS and Azure AKS are documented as target integrations only; the current Hybrid Cloud provider adapter is a scaffold and does not yet install GAMGEE into an existing managed Kubernetes cluster.
+
+**Addressing convention:** all addresses below are examples from private RFC 1918 ranges. Replace them with addresses or private DNS names from your own VPC/VNet. Do not configure the example addresses literally, and do not assume cloud load-balancer or managed Kubernetes API addresses are static.
+
+#### A. One VM — single-node Core Cloud
+
+Use one fresh Debian/Ubuntu VM. It runs the Control Tower and, after the approved local cloud plan is applied, the K3s server/control plane and workloads.
+
+| Component | Example address | Listener / destination | Exposure |
+| --- | --- | --- | --- |
+| GAMGEE Control Tower | `127.0.0.1` on the VM | TCP `8091` | Loopback only; do not publish to the Internet. |
+| K3s API | VM private IP, e.g. `10.20.0.10` | TCP `6443` | Cluster administration and future worker joins; private network only. |
+| Kubernetes ingress (when used) | VM private/public IP or fronting load balancer | TCP `80` and `443` | Application traffic only, when an Ingress is configured. |
+| SSH administration | VM IP / DNS | TCP `22` | Admin workstation or bastion only. |
+
+Install:
+
+    git clone https://github.com/roime81/GAMGEE-CLOUD.git
+    cd GAMGEE-CLOUD
+    sudo bash scripts/install-gamgee.sh
+
+The Control Tower listens on `127.0.0.1:8091`. Open it locally on the VM at `http://127.0.0.1:8091`, or from an administrator workstation through an SSH tunnel:
+
+    ssh -L 8091:127.0.0.1:8091 <linux-user>@<vm-public-ip-or-dns>
+
+Then browse to `http://127.0.0.1:8091` on the workstation. The public IP/DNS in the SSH command is the VM's reachable management address; it is not a reason to expose TCP 8091.
+
+#### B. Multiple VMs — one K3s control plane plus worker VMs
+
+Use one control-plane VM and one or more worker VMs on the same trusted private network or VPN. The Control Tower and K3s server run on the control-plane VM. Worker VMs join the same K3s cell and add workload capacity.
+
+Example private address plan (replace these values with your own):
+
+| Role | Example private IP / DNS | Required connectivity |
+| --- | --- | --- |
+| Control plane + Control Tower | `10.20.0.10` / `gamgee-cp.internal` | TCP `6443` from workers; TCP `10250` to nodes for kubelet access; UDP `8472` between nodes when using the default Flannel VXLAN backend. |
+| Worker 1 | `10.20.0.11` / `gamgee-worker-01.internal` | Outbound TCP `6443` to control plane; node-to-node CNI traffic. |
+| Worker 2 | `10.20.0.12` / `gamgee-worker-02.internal` | Outbound TCP `6443` to control plane; node-to-node CNI traffic. |
+| Admin workstation / bastion | Your managed admin IP or subnet | SSH TCP `22` to the control plane; use an SSH tunnel for the Control Tower. |
+
+On the control plane, retrieve the join token securely and record the K3s version:
+
+    sudo cat /var/lib/rancher/k3s/server/node-token
+    k3s --version
+
+On each worker, check out the same GAMGEE release and join using the control plane's **private** address:
+
+    sudo bash scripts/join-compute-node.sh https://10.20.0.10:6443
+
+The script prompts for the node token without echoing it. Do not put the token in shell history, source control, tickets or chat. To pin the worker to the server's exact K3s version:
+
+    sudo env GAMGEE_K3S_VERSION=vX.Y.Z+k3sN bash scripts/join-compute-node.sh https://10.20.0.10:6443
+
+Replace the version with the exact output from `k3s --version`. Verify from the control plane:
+
+    kubectl get nodes -o wide
+
+**Multi-VM firewall rules**
+
+| Source | Destination | Protocol / port | Purpose |
+| --- | --- | --- | --- |
+| Worker nodes | Control-plane private IP | TCP `6443` | K3s Kubernetes API and node registration. |
+| Control plane / nodes as required by K3s | Kubelet on each node | TCP `10250` | Kubelet API/metrics and control-plane-to-node operations; restrict to cluster nodes/control plane. |
+| All K3s nodes | All K3s nodes | UDP `8472` | Flannel VXLAN overlay traffic for the current default K3s networking setup. |
+| Admin workstation / bastion | Control-plane VM | TCP `22` | SSH administration and SSH tunnel. |
+| Nodes | Approved DNS resolver | UDP/TCP `53` | Name resolution. |
+| Nodes | Approved NTP service | UDP `123` | Time synchronisation. |
+| Nodes | Approved package, chart and container registries | TCP `443` | OS packages, K3s installer, Helm charts and image pulls. |
+| Clients | Ingress endpoint / ingress nodes | TCP `80`, `443` | HTTP/HTTPS application traffic, only when application ingress is enabled. |
+
+The current starter uses K3s' default Flannel backend; UDP `8472` is therefore relevant to the default VXLAN configuration. If you deliberately change the CNI/backend, replace this rule with that network plugin's documented ports. Do not open UDP `8472`, TCP `6443` or TCP `10250` to the public Internet. Embedded-etcd ports TCP `2379`–`2380` are not required for this single-server preview; they are relevant to a separately designed HA control plane, which this release does not provide.
+
+#### C. AWS — Amazon EKS managed Kubernetes (planned integration)
+
+<Badge>Not available in the current release</Badge>
+
+The current installer does not create an EKS cluster, configure AWS IAM, or attach the GAMGEE Resource Engine to an existing EKS cluster. The Hybrid Cloud provider is a scaffold. Do not treat the following as an executable EKS installation procedure.
+
+The intended integration pattern is:
+
+- Create or select an EKS cluster in the target AWS account and VPC using the organisation's approved EKS/IaC process.
+- Provide a dedicated GAMGEE integration identity with narrowly scoped AWS IAM and Kubernetes RBAC permissions. Do not use long-lived access keys in the README, scripts or a shared kubeconfig.
+- Configure the EKS API endpoint as private where the network design permits. The endpoint is a DNS name managed by AWS; do not hard-code a presumed cluster IP.
+- Run the future GAMGEE control-plane integration where it can resolve and reach the EKS endpoint, or use an approved private connectivity path.
+- Use the selected AWS VPC CNI / network policy / load-balancer configuration to determine node and pod network rules. Do not copy K3s Flannel UDP `8472` rules into an EKS security group unless the selected network overlay explicitly requires them.
+
+| Flow | Destination | Protocol / port | Intended rule |
+| --- | --- | --- | --- |
+| Administrator | GAMGEE management host | TCP `22` (SSH) | Restrict to admin/bastion source ranges; use an SSH tunnel to loopback TCP `8091`. |
+| Admin browser (through tunnel) | GAMGEE Control Tower | TCP `8091` | Loopback on the management host; do not expose publicly. |
+| Future GAMGEE integration service | EKS Kubernetes API endpoint DNS | TCP `443` | Allow from the integration host/security group to the cluster endpoint; private endpoint routing and DNS must be configured. |
+| EKS worker nodes | EKS control-plane-managed endpoint | TCP `443` | Managed EKS control-plane communication; AWS manages the control-plane side. |
+| Application clients | Approved AWS load balancer / ingress | TCP `80` and/or `443` | Only the listener ports intentionally published by the chosen ingress/load-balancer design. |
+| Nodes / pods | Required AWS services and approved registries | Usually TCP `443` | Egress according to the selected CNI, image registry, logging and cloud-service design. |
+
+Use the EKS cluster's actual API endpoint DNS name, VPC/subnet CIDRs, security-group IDs and load-balancer DNS name in the deployment runbook. Those values are created by AWS and differ by environment. The current GAMGEE release has no EKS onboarding command or validated EKS driver.
+
+#### D. Azure — Azure Kubernetes Service (AKS) managed Kubernetes (planned integration)
+
+<Badge>Not available in the current release</Badge>
+
+The current installer does not create an AKS cluster, configure Microsoft Entra ID, or attach the GAMGEE Resource Engine to an existing AKS cluster. The Hybrid Cloud provider is a scaffold. The following is a target integration pattern, not a supported installation procedure today.
+
+The intended integration pattern is:
+
+- Create or select an AKS cluster in the target Azure subscription, resource group and VNet using the organisation's approved AKS/IaC process.
+- Use a dedicated Microsoft Entra workload identity or managed identity, with least-privilege Azure permissions and Kubernetes RBAC. Avoid storing client secrets or administrator kubeconfigs in source control.
+- Prefer a private AKS API server when required by the security model. Use the cluster's actual private FQDN and configure VNet/private DNS resolution for the future GAMGEE integration service.
+- Place the future GAMGEE integration service on an approved network path to the AKS API endpoint.
+- Derive node/pod network rules from the selected Azure CNI or overlay mode, Azure Network Policy implementation and ingress architecture. Do not assume the K3s Flannel ports apply to AKS.
+
+| Flow | Destination | Protocol / port | Intended rule |
+| --- | --- | --- | --- |
+| Administrator | GAMGEE management host | TCP `22` (SSH) | Restrict to admin/bastion source ranges; use an SSH tunnel to loopback TCP `8091`. |
+| Admin browser (through tunnel) | GAMGEE Control Tower | TCP `8091` | Loopback on the management host; do not expose publicly. |
+| Future GAMGEE integration service | AKS Kubernetes API private FQDN / endpoint | TCP `443` | Allow from the integration host/subnet to the API endpoint; configure private DNS and routing. |
+| AKS nodes | AKS-managed control-plane endpoint | TCP `443` | Required managed Kubernetes API communication; validate against the selected AKS network mode. |
+| Application clients | Approved Azure Load Balancer / ingress | TCP `80` and/or `443` | Only the listeners intentionally published by the chosen ingress design. |
+| Nodes / pods | Required Azure services and approved registries | Usually TCP `443` | Egress according to the selected CNI, image registry, monitoring and cloud-service design. |
+
+Use the actual AKS API FQDN, private DNS zone, VNet/subnet CIDRs, NSG rules and ingress load-balancer IP/DNS from the Azure deployment. These values are environment-specific; do not assume a fixed AKS API IP. The current GAMGEE release has no AKS onboarding command or validated AKS driver.
+
+#### Port and exposure summary
+
+| Port | Protocol | Used by | Exposure guidance |
+| --- | --- | --- | --- |
+| `22` | TCP | SSH administration / tunnel | Admin or bastion source ranges only. |
+| `53` | UDP/TCP | DNS | To approved resolvers; not a public inbound service on GAMGEE nodes. |
+| `80` | TCP | HTTP application ingress, if enabled | Public/client-facing only when intentionally publishing an HTTP route. |
+| `123` | UDP | NTP | To approved time sources. |
+| `443` | TCP | HTTPS, registries, cloud Kubernetes API endpoints | Egress to approved destinations; ingress only at an intended HTTPS load balancer. |
+| `6443` | TCP | K3s API server | Private cluster traffic only; not EKS/AKS API port. |
+| `8091` | TCP | GAMGEE Control Tower | Bound to `127.0.0.1`; reach remotely through SSH tunnel. |
+| `8472` | UDP | K3s Flannel VXLAN | Node-to-node private traffic only when using the default Flannel VXLAN backend. |
+| `10250` | TCP | Kubernetes kubelet API | Restrict to control-plane / trusted cluster-node sources. |
+
+**IP address and firewall rules are deployment-specific.** Use private IPs or private DNS for K3s control-plane/worker communication, reserve addresses where required, and permit only the source/destination pairs in the relevant topology. EKS and AKS API endpoints are cloud-managed DNS endpoints; use their actual endpoint names and the relevant security-group/NSG/network-policy configuration rather than inventing static IPs. Never expose the Control Tower, Kubernetes API, kubelet or CNI ports directly to the public Internet.
+
+---
+
 ### Manual Control Tower installation
 
 For development or hosts without systemd:
