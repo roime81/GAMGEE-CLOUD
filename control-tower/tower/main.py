@@ -23,6 +23,7 @@ from tower.config import STATIC_DIR, settings
 from tower.planner import build_plan
 from tower.runner import execute_job
 from tower.store import JobStore
+from tower.lifecycle import resume_replicas
 from tower.workloads import (
     ScaleRequest,
     WorkloadRequest,
@@ -354,12 +355,7 @@ def scale_app(workspace: str, app_name: str, request: ScaleRequest):
 @app.post("/v1/tower/workspaces/{workspace}/apps/{app_name}/resume", dependencies=[Depends(require_token)])
 def resume_app(workspace: str, app_name: str):
     namespace, deployment = _managed_deployment(workspace, app_name)
-    annotations = deployment.get("metadata", {}).get("annotations", {})
-    try:
-        target = int(annotations.get("gamgee.cloud/previous-replicas", "1"))
-    except (TypeError, ValueError):
-        target = 1
-    target = min(20, max(1, target))
+    target = resume_replicas(deployment)
     try:
         run_kubectl(["scale", f"deployment/{app_name}", f"--replicas={target}", "--namespace", namespace])
     except ClusterError as exc:

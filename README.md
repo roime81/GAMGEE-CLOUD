@@ -261,8 +261,8 @@ These constraints are intentional. An image that expects root, writes to its roo
 
 The current workspace app view can show app image, desired replicas, ready replicas and basic state. The available actions are:
 
-- **Stop** — scale the Deployment to zero replicas.
-- **Start** — scale it to one replica.
+- **Stop** — scale the Deployment to zero replicas while storing its previous positive replica count in a GAMGEE annotation.
+- **Start** — restore the stored replica count (with a safe default of one if no prior count exists).
 - **Restart** — request a Kubernetes rolling restart.
 - **Delete** — delete the GAMGEE-managed Deployment, Service and Ingress.
 
@@ -468,7 +468,8 @@ An apply request is rejected unless the plan hash still matches, apply is enable
 | POST | /v1/tower/workspaces | Creates a workspace/Tenant with production and staging namespaces. |
 | GET | /v1/tower/workspaces/{workspace}/apps | Lists GAMGEE-managed application Deployments in production. |
 | POST | /v1/tower/workspaces/{workspace}/apps | Compiles and applies a stateless application. |
-| POST | /v1/tower/workspaces/{workspace}/apps/{app}/scale | Changes replica count from 0 to 20. |
+| POST | /v1/tower/workspaces/{workspace}/apps/{app}/scale | Changes replica count from 0 to 20; scaling to zero records the previous positive replica count. |
+| POST | /v1/tower/workspaces/{workspace}/apps/{app}/resume | Restores the last positive replica count (bounded to 1–20). |
 | POST | /v1/tower/workspaces/{workspace}/apps/{app}/restart | Requests a rollout restart. |
 | DELETE | /v1/tower/workspaces/{workspace}/apps/{app} | Deletes the app Deployment, Service and Ingress. |
 

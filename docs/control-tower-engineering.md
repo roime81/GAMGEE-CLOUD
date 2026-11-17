@@ -103,7 +103,10 @@ Workspace creation emits a Capsule Tenant with production and staging namespaces
 - GET /v1/tower/workspaces/{workspace}/apps
 - POST /v1/tower/workspaces/{workspace}/apps
 - POST /v1/tower/workspaces/{workspace}/apps/{app}/scale
+- POST /v1/tower/workspaces/{workspace}/apps/{app}/resume
 - POST /v1/tower/workspaces/{workspace}/apps/{app}/restart
+
+Scaling to zero stores the previous positive replica count in a GAMGEE-managed Deployment annotation. The resume endpoint restores that value (bounded to 1–20, defaulting to one if missing or invalid).
 - DELETE /v1/tower/workspaces/{workspace}/apps/{app}
 
 Example body:
