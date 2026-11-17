@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import contextmanager
 import json
 import sqlite3
 import threading
@@ -37,7 +38,7 @@ class ResourceStore:
         self.database_path = database_path
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.executescript(
                 """
                 PRAGMA journal_mode=WAL;
@@ -108,6 +109,14 @@ class ResourceStore:
         connection.execute("PRAGMA busy_timeout=20000")
         return connection
 
+    @contextmanager
+    def _connection(self):
+        connection = self._connect()
+        try:
+            yield connection
+        finally:
+            connection.close()
+
     @staticmethod
     def _resource(row: sqlite3.Row | None) -> dict[str, Any] | None:
         if row is None:
@@ -135,11 +144,11 @@ class ResourceStore:
         return self._resource(row)
 
     def get(self, resource_id: str) -> dict[str, Any] | None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             return self._get_in(connection, resource_id)
 
     def find(self, kind: str, workspace: str, name: str) -> dict[str, Any] | None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             row = connection.execute(
                 "SELECT * FROM resources WHERE kind=? AND workspace=? AND name=?",
                 (kind, workspace, name),
@@ -166,7 +175,7 @@ class ResourceStore:
             clauses.append("phase != 'deleted'")
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
         values.append(max(1, min(limit, 500)))
-        with self._connect() as connection:
+        with self._connection() as connection:
             rows = connection.execute(
                 f"SELECT * FROM resources{where} ORDER BY updated_at DESC LIMIT ?",
                 values,
@@ -547,7 +556,7 @@ class ResourceStore:
             connection.commit()
 
     def get_operation(self, operation_id: str) -> dict[str, Any] | None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             row = connection.execute(
                 "SELECT * FROM resource_operations WHERE id=?",
                 (operation_id,),
@@ -568,7 +577,7 @@ class ResourceStore:
         }
 
     def list_operations(self, resource_id: str, *, limit: int = 25) -> list[dict[str, Any]]:
-        with self._connect() as connection:
+        with self._connection() as connection:
             rows = connection.execute(
                 "SELECT id FROM resource_operations WHERE resource_id=? ORDER BY generation DESC LIMIT ?",
                 (resource_id, max(1, min(limit, 100))),
@@ -576,7 +585,7 @@ class ResourceStore:
         return [item for row in rows if (item := self.get_operation(row["id"])) is not None]
 
     def events(self, resource_id: str, *, limit: int = 100) -> list[dict[str, Any]]:
-        with self._connect() as connection:
+        with self._connection() as connection:
             rows = connection.execute(
                 """
                 SELECT * FROM resource_events WHERE resource_id=?

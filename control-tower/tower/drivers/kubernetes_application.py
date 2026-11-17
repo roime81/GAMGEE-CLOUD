@@ -36,7 +36,11 @@ class KubernetesApplicationDriver:
         namespace = f"{workspace}-production"
 
         if resource["desired"].get("deleted"):
-            self._workspace_namespace(workspace)
+            try:
+                self._workspace_namespace(workspace)
+            except ClusterNotFound:
+                # Namespace deletion already removed every namespaced object.
+                return {"state": "deleted", "namespace": namespace, "reason": "workspace_namespace_absent"}
             for kind in ("deployment.apps", "service", "ingress"):
                 self._existing(kind, name, namespace, resource_id, workspace)
             run_kubectl(
