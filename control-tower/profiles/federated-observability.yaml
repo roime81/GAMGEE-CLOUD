@@ -9,7 +9,7 @@ resources:
   minimum_vcpu: 2
   minimum_ram_gib: 4
   minimum_disk_gib: 80
-required_tools: [ansible-playbook, helm, kubectl]
+required_tools: [ansible-playbook]
 steps:
   - executor: ansible-playbook
     playbook: automation/ansible/federated-observability.yml
