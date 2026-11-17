@@ -57,6 +57,11 @@ def health():
     return {"status": "healthy", "service": "gamgee-control-tower", "version": app.version}
 
 
+@app.get("/v1/tower/capabilities", dependencies=[Depends(require_token)])
+def capabilities():
+    return {"apply_enabled": settings.allow_apply, "execution_host": settings.host}
+
+
 @app.get("/v1/tower/profiles", dependencies=[Depends(require_token)])
 def profiles():
     catalog = load_catalog()
