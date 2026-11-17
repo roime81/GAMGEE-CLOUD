@@ -298,6 +298,10 @@ On a supported Ubuntu/Debian host with Python 3, OpenSSL and access to the GAMGE
     sudo bash scripts/install-control-tower.sh
     sudo bash scripts/run-control-tower.sh
 
+The launcher starts in planning-only mode. To explicitly enable installation operations, start it with:
+
+    sudo env GAMGEE_TOWER_ALLOW_APPLY=true bash scripts/run-control-tower.sh
+
 Open the local workspace at http://127.0.0.1:8091. The API token is generated in control-tower/.tower-token with restrictive file permissions. Paste it into the UI. The server binds to loopback by default.
 
 The API also exposes an OpenAPI document at http://127.0.0.1:8091/docs and a liveness check at http://127.0.0.1:8091/healthz.
