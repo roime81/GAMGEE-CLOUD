@@ -1,4 +1,4 @@
-.PHONY: all bootstrap deploy-core run-agent test test-factory factory-up factory-down clean
+.PHONY: all bootstrap deploy-core run-agent test test-factory factory-up factory-down clean tower-install tower-run tower-test
 
 all: bootstrap
 
@@ -27,3 +27,13 @@ factory-down:
 
 clean:
 	@bash scripts/teardown.sh
+
+# GAMGEE Control Tower
+tower-install:
+	@sudo bash scripts/install-control-tower.sh
+
+tower-run:
+	@sudo bash scripts/run-control-tower.sh
+
+tower-test:
+	@cd control-tower && PYTHONPATH=. python -m unittest discover -s tests -v
