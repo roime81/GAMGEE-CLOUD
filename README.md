@@ -169,7 +169,7 @@ Open this URL from a browser running on the VM:
 
 <http://127.0.0.1:8091>
 
-Paste the token and select **Connect**. Then choose **Build my cloud**. GAMGEE generates a plan and checks host prerequisites before asking you to approve installation of the Core Cloud.
+Paste the token and select **Connect**. Then choose **Build my cloud**. GAMGEE detects host capabilities and generates one dependency-ordered plan for the full local bundle. It checks resources and missing tools before asking you to approve installation.
 
 The local bundle installs the supported local profiles in dependency order. On a typical host without KVM or a pre-configured Docker AI stack, it installs K3s, Helm, Capsule, Traefik, OpenCost, KEDA, Kyverno and the local VictoriaMetrics/Grafana stack. With /dev/kvm it also installs the Incus/QEMU VM foundation. The Control Tower plan shows exact selected profiles, minimum resources and host preflight results before changes are made.
 
