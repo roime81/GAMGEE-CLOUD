@@ -1,0 +1,19 @@
+[Unit]
+Description=GAMGEE Cloud Control Tower
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/gamgee
+EnvironmentFile=/etc/gamgee/control-tower.env
+ExecStart=/opt/gamgee/control-tower/.venv/bin/uvicorn tower.main:app --app-dir /opt/gamgee/control-tower --host 127.0.0.1 --port 8091
+Restart=on-failure
+RestartSec=5
+UMask=0077
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
