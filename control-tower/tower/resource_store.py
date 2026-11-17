@@ -263,7 +263,7 @@ class ResourceStore:
         )
         desired_json = _canonical(desired)
         now = _stamp()
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             replay = self._idempotent_replay(connection, workspace, idempotency_key, fingerprint)
             if replay:
@@ -353,7 +353,7 @@ class ResourceStore:
             raise ValueError("Idempotency-Key must contain between 1 and 128 characters.")
         fingerprint = request_fingerprint({"action": "delete", "resource_id": resource_id, "workspace": workspace})
         now = _stamp()
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             replay = self._idempotent_replay(connection, workspace, idempotency_key, fingerprint)
             if replay:
@@ -418,7 +418,7 @@ class ResourceStore:
         now = _stamp(now_dt)
         stale = _stamp(now_dt - timedelta(seconds=stale_seconds))
         claimed: list[dict[str, Any]] = []
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 """
@@ -479,13 +479,20 @@ class ResourceStore:
         deleted: bool = False,
     ) -> None:
         now = _stamp()
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute("SELECT generation FROM resources WHERE id=?", (resource_id,)).fetchone()
+            row = connection.execute(
+                "SELECT generation, observed_generation, observed_json FROM resources WHERE id=?",
+                (resource_id,),
+            ).fetchone()
             if row is None:
                 connection.commit()
                 return
             current_generation = int(row["generation"])
+            observed_changed = (
+                int(row["observed_generation"]) != generation
+                or row["observed_json"] != _canonical(observed)
+            )
             phase = ("deleted" if deleted else "ready") if current_generation == generation else "pending"
             deleted_at = now if deleted and current_generation == generation else None
             next_attempt = _stamp(utc_now() + timedelta(seconds=60)) if phase == "ready" else now
@@ -504,14 +511,15 @@ class ResourceStore:
                 """,
                 (_canonical(observed), now, resource_id, generation),
             )
-            self._record_event(
-                connection,
-                resource_id,
-                generation,
-                "reconcile.deleted" if deleted else "reconcile.succeeded",
-                observed,
-                now,
-            )
+            if observed_changed or deleted:
+                self._record_event(
+                    connection,
+                    resource_id,
+                    generation,
+                    "reconcile.deleted" if deleted else "reconcile.succeeded",
+                    observed,
+                    now,
+                )
             connection.commit()
 
     def mark_progress(
@@ -574,7 +582,7 @@ class ResourceStore:
         now_dt = utc_now()
         now = _stamp(now_dt)
         safe_error = (error or "Unknown reconciliation error")[:2000]
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 "SELECT generation, retry_count FROM resources WHERE id=?",

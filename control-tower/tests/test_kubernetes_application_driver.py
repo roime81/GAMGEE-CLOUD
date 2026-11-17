@@ -31,7 +31,14 @@ class KubernetesApplicationDriverTests(unittest.TestCase):
                 if calls["deployment.apps"] == 1:
                     raise ClusterNotFound("not found")
                 return {
-                    "metadata": {"generation": 3},
+                    "metadata": {
+                        "generation": 3,
+                        "labels": {
+                            "gamgee.cloud/managed-by": "gamgee",
+                            "gamgee.cloud/tenant": "acme",
+                            "gamgee.cloud/resource-id": "01234567-89ab-cdef-0123-456789abcdef",
+                        },
+                    },
                     "spec": {
                         "replicas": 1,
                         "template": {"spec": {"containers": [{"image": "ghcr.io/acme/portal:v1.2.3"}]}},
