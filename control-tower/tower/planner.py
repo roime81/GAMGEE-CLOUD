@@ -44,6 +44,9 @@ def build_plan(selected: list[str]) -> dict[str, Any]:
         if not any(name in release for name in ("id=ubuntu", "id=debian", "id_like=debian")):
             warnings.append("The bundled host playbooks currently target Debian/Ubuntu. Review before applying on another distribution.")
 
+    if "private-iaas" in ordered and not Path("/dev/kvm").exists():
+        blockers.append("Private IaaS requires /dev/kvm. Enable hardware or nested virtualisation before applying.")
+
     available_cpu = os.cpu_count() or 1
     available_ram = _available_memory_gib()
     available_disk = round(shutil.disk_usage(ROOT).free / (1024**3), 1)
@@ -56,19 +59,25 @@ def build_plan(selected: list[str]) -> dict[str, Any]:
     if missing_tools:
         warnings.append("Missing tools: " + ", ".join(missing_tools) + ". Install prerequisites before applying.")
 
-    selected_items = [
-        {
-            "id": item["id"],
-            "name": item["name"],
-            "implementation": item.get("implementation", "adapter"),
-            "resources": item["resources"],
-            "components": item.get("components", []),
-            "steps": item["steps"],
-        }
-        for item in items
-    ]
+    source_checksums: dict[str, str] = {}
+    selected_items = []
+    for item in items:
+        selected_items.append(item)
+        source_paths = [step["playbook"] for step in item["steps"]]
+        source_paths.extend(item.get("artifacts", []))
+        for source_path in source_paths:
+            candidate = (ROOT / source_path).resolve()
+            if ROOT not in candidate.parents or not candidate.is_file():
+                blockers.append(f"Bundle source is missing or outside the repository: {source_path}")
+                continue
+            source_checksums[source_path] = hashlib.sha256(candidate.read_bytes()).hexdigest()
+
     fingerprint_input = json.dumps(
-        {"profiles": ordered, "items": selected_items},
+        {
+            "profiles": ordered,
+            "items": selected_items,
+            "source_checksums": source_checksums,
+        },
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
@@ -86,6 +95,7 @@ def build_plan(selected: list[str]) -> dict[str, Any]:
         },
         "required_tools": tools,
         "missing_tools": missing_tools,
+        "source_checksums": source_checksums,
         "blockers": blockers,
         "warnings": warnings,
         "apply_ready": not blockers and not missing_tools,
