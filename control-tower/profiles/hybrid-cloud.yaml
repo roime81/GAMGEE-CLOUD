@@ -10,6 +10,7 @@ resources:
   minimum_ram_gib: 2
   minimum_disk_gib: 10
 required_tools: [ansible-playbook, tofu]
+artifacts: [automation/opentofu/hybrid/main.tf]
 steps:
   - executor: ansible-playbook
     playbook: automation/ansible/hybrid-cloud.yml
