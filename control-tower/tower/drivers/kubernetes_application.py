@@ -55,7 +55,16 @@ class KubernetesApplicationDriver:
                     "--wait=false",
                 ]
             )
-            return {"state": "deleted", "namespace": namespace}
+            remaining = [
+                kind
+                for kind in ("deployment.apps", "service", "ingress")
+                if self._existing(kind, name, namespace, resource_id, workspace) is not None
+            ]
+            return {
+                "state": "deleting" if remaining else "deleted",
+                "namespace": namespace,
+                "remaining_resources": remaining,
+            }
 
         self._workspace_namespace(workspace)
         desired = dict(resource["desired"])
