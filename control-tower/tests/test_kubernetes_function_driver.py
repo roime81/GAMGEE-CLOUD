@@ -167,7 +167,7 @@ class KubernetesFunctionDriverTests(unittest.TestCase):
         run_mock.side_effect = run_side_effect
         observed = KubernetesFunctionDriver().reconcile(resource)
         self.assertEqual(observed["state"], "deleted")
-        self.assertEqual(len(deleted), 5)
+        self.assertEqual(len(deleted), 6)
 
 
 if __name__ == "__main__":
