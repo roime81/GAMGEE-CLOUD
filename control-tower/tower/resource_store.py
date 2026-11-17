@@ -114,6 +114,12 @@ class ResourceStore:
         connection = self._connect()
         try:
             yield connection
+            if connection.in_transaction:
+                connection.commit()
+        except Exception:
+            if connection.in_transaction:
+                connection.rollback()
+            raise
         finally:
             connection.close()
 
