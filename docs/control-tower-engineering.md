@@ -23,7 +23,11 @@ On a supported Ubuntu/Debian host:
     sudo bash scripts/install-control-tower.sh
     sudo bash scripts/run-control-tower.sh
 
-Open http://127.0.0.1:8091 and read the API token from control-tower/.tower-token.
+The launcher starts in planning-only mode. To explicitly permit host changes, start it with:
+
+    sudo env GAMGEE_TOWER_ALLOW_APPLY=true bash scripts/run-control-tower.sh
+
+Open http://127.0.0.1:8091 and read the API token from control-tower/.tower-token (use sudo cat when required). The UI displays whether apply is enabled.
 
 The API is also documented at /docs. Health is available at /healthz.
 
