@@ -33,6 +33,17 @@ class ResourceModelTests(unittest.TestCase):
         self.assertEqual(request.spec.min_replicas, 0)
         self.assertEqual(request.spec.max_replicas, 8)
 
+    def test_function_accepts_a_sha256_pinned_oci_artifact(self):
+        digest = "a" * 64
+        request = FunctionResourceRequest(
+            workspace="acme",
+            spec={
+                "name": "thumbnail",
+                "image": f"ghcr.io/acme/thumbnail@sha256:{digest}",
+            },
+        )
+        self.assertIn("@sha256:", request.spec.image)
+
     def test_function_rejects_mutable_image_and_arbitrary_fields(self):
         with self.assertRaises(ValidationError):
             FunctionResourceRequest(
