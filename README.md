@@ -523,6 +523,12 @@ A GAMGEE Function is a versioned Spin WebAssembly artifact, not a general Docker
 
 Create or update a Function through the canonical Resource API:
 
+Set the local Control Tower endpoint and token in the current shell (same setup as the Application API examples):
+
+    export GAMGEE_API_TOKEN="$(sudo cat control-tower/.tower-token)"
+    export GAMGEE_URL="http://127.0.0.1:8091"
+
+
 ```json
 {
   "workspace": "acme",
@@ -594,7 +600,7 @@ Resource API:
 | POST | `/v1/resources/applications` | Create or update a versioned GAMGEE Application resource. Accepts optional `Idempotency-Key`. |
 | POST | `/v1/resources/functions` | Create or update a native GAMGEE WebAssembly Function resource. Accepts optional `Idempotency-Key`. |
 | GET | `/v1/resources?kind=Function` | List Function resources and their desired/observed state. |
-| GET | `/v1/resources` | List resources, optionally filtered by workspace and kind. |
+| GET | `/v1/resources` | Lists Application resources by default; use `?kind=Function` for Functions or provide an explicit kind filter. |
 | GET | `/v1/resources/{resource_id}` | Read desired state and observed status (workspace query required). |
 | GET | `/v1/resources/{resource_id}/operations` | Read generation-scoped operations and retry status. |
 | GET | `/v1/resources/{resource_id}/events` | Read resource lifecycle events. |
