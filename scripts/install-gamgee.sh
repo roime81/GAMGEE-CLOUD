@@ -3,6 +3,12 @@ set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# If AI secrets have already been configured, restrict them before the local
+# capability detector considers enabling the AI Factory profile.
+if [[ -f "$ROOT/.env" ]]; then
+  chmod 0600 "$ROOT/.env"
+fi
+
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Run once with sudo: sudo bash scripts/install-gamgee.sh" >&2
   exit 1

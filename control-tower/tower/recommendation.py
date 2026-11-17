@@ -16,6 +16,13 @@ BASE_PROFILES = [
 def _configured_ai_env(path: Path) -> bool:
     if not path.is_file():
         return False
+    try:
+        # Do not auto-start a secrets-bearing stack from a group/world-readable env file.
+        if path.stat().st_mode & 0o077:
+            return False
+    except OSError:
+        return False
+
     values: dict[str, str] = {}
     try:
         for raw in path.read_text(encoding="utf-8").splitlines():

@@ -33,6 +33,7 @@ class LocalBundleTests(unittest.TestCase):
                 "FACTORY_POSTGRES_PASSWORD=" + "d" * 32 + "\n",
                 encoding="utf-8",
             )
+            env_file.chmod(0o600)
             with patch("tower.recommendation.shutil.which", return_value="/usr/bin/docker"), patch(
                 "tower.recommendation.subprocess.run",
                 side_effect=[
@@ -52,7 +53,22 @@ class LocalBundleTests(unittest.TestCase):
                 "FACTORY_POSTGRES_PASSWORD=replace-with-a-long-random-password\n",
                 encoding="utf-8",
             )
+            env_file.chmod(0o600)
             self.assertFalse(ai_factory_ready(Path(tmp)))
+
+    def test_ai_env_with_group_or_world_permissions_is_not_ready(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_file = Path(tmp) / ".env"
+            env_file.write_text(
+                "AUTHENTIK_POSTGRES_PASSWORD=" + "a" * 32 + "\n"
+                "AUTHENTIK_SECRET_KEY=" + "b" * 32 + "\n"
+                "GAMGEE_API_TOKEN=" + "c" * 32 + "\n"
+                "FACTORY_POSTGRES_PASSWORD=" + "d" * 32 + "\n",
+                encoding="utf-8",
+            )
+            env_file.chmod(0o644)
+            with patch("tower.recommendation.shutil.which", return_value="/usr/bin/docker"):
+                self.assertFalse(ai_factory_ready(Path(tmp)))
 
 
 if __name__ == "__main__":

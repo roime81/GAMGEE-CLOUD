@@ -91,7 +91,7 @@ Apply body:
 
 ### Local cloud recommendation
 
-GET /v1/tower/cloud/recommendation returns the automatically selected local profile set plus included/skipped reasons. It always includes Core, Function, Security and local Observability foundations. It includes Private IaaS only when /dev/kvm exists. It includes AI Enterprise only when Docker Compose v2, a running Docker daemon and the required configured secrets in the repository .env are detected. Hybrid is omitted because its current provider adapter is only a scaffold.
+GET /v1/tower/cloud/recommendation returns the automatically selected local profile set plus included/skipped reasons. It always includes Core, Function, Security and local Observability foundations. It includes Private IaaS only when /dev/kvm exists. It includes AI Enterprise only when Docker Compose v2, a running Docker daemon and the required configured secrets in a mode-0600 repository .env are detected. The guided installer tightens an existing .env file to 0600 before evaluation. Hybrid is omitted because its current provider adapter is only a scaffold.
 
 ### Workspace
 
