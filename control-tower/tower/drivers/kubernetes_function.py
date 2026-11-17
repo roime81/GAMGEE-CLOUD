@@ -293,6 +293,14 @@ class KubernetesFunctionDriver:
                     ["delete", f"ingress/{key}", "--namespace", KEDA_NAMESPACE,
                      "--ignore-not-found=true", "--wait=false"]
                 )
+                # A private update is not converged while the former public route
+                # still exists, even when Kubernetes accepted the async delete.
+                if self._existing("ingress", key, KEDA_NAMESPACE, resource) is not None:
+                    return {
+                        "state": "progressing",
+                        "namespace": namespace,
+                        "public_route": "deleting",
+                    }
         return self.observe(resource)
 
     def observe(self, resource: dict[str, Any]) -> dict[str, Any]:
