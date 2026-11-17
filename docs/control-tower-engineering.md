@@ -58,6 +58,25 @@ All /v1/tower/* endpoints require Authorization: Bearer <token>. The generated 2
 
 There is one installation-level administrator token. There is no per-user OIDC, MFA, delegated role, tenant-scoped access token or access review workflow in this version.
 
+## Resource Engine
+
+The Resource Engine persists Application desired state in the same SQLite database as the Control Tower job ledger, but in separate tables. Each resource has a stable UUID, workspace/kind/name identity, desired spec, observed state, generation, observed generation, phase, retry count and last error. Each generation has one operation record. An optional `Idempotency-Key` is scoped to the workspace and bound to a canonical request hash; reusing the same key with a different payload returns HTTP 409. Resource events are appended for desired-state and reconciliation transitions.
+
+`ResourceEngine` uses a narrow driver registry. The initial driver is `KubernetesApplicationDriver`, which validates the workspace namespace, verifies that all same-named objects carry the GAMGEE manager/tenant/resource-id labels, validates TLS Secret type and compiles only the known Application schema. The driver applies declarative Deployment/Service/Ingress resources or deletes only owned objects. It never accepts caller-supplied Kubernetes YAML or shell commands.
+
+The background worker claims due resources atomically with SQLite `BEGIN IMMEDIATE`, executes one generation, stores observed state and operation outcome, and schedules transient failures with bounded exponential backoff. A resource update that races an in-flight reconcile supersedes the old generation; the newer desired generation remains pending. Stale reconciling leases are recovered after three minutes. The initial worker is a single-process loop; SQLite is not a multi-host shared state backend and this release does not claim horizontally scaled reconciler HA.
+
+### Resource API
+
+- `POST /v1/resources/applications`
+- `GET /v1/resources`
+- `GET /v1/resources/{resource_id}?workspace=<workspace>`
+- `GET /v1/resources/{resource_id}/operations?workspace=<workspace>`
+- `GET /v1/resources/{resource_id}/events?workspace=<workspace>`
+- `DELETE /v1/resources/{resource_id}?workspace=<workspace>`
+
+The existing workspace-scoped `/v1/tower/workspaces/{workspace}/apps` endpoints are compatibility routes over the same Resource Engine. Stop, resume, restart and delete now change desired state and generate operations rather than directly issuing imperative Kubernetes mutations from request handlers.
+
 ## API inventory
 
 ### Health and cluster
@@ -203,7 +222,7 @@ This creates a K3s agent node only. It does not create an HA control plane, an I
 
     PYTHONPATH=control-tower python -m unittest discover -s control-tower/tests -v
 
-Tests cover profile loading/dependency resolution, planning, job persistence, playbook path safety, workload schema/compiler and Kubernetes adapter argv behavior.
+Tests cover profile loading/dependency resolution, planning, job/resource persistence, idempotency, generations, operation claiming, retry/backoff, reconciliation and driver safety, playbook path safety, workload schema/compiler and Kubernetes adapter argv behavior.
 
 CI also runs AI service unit tests, shell syntax checks and Ansible syntax checks. CI does not provision a real K3s cluster. A disposable-VM acceptance test is required before a production rollout.
 

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from tower.workloads import WorkloadRequest
 
 
 RESOURCE_API_VERSION = "gamgee.io/v1alpha1"
@@ -49,3 +51,21 @@ def to_resource_document(resource: dict[str, Any]) -> dict[str, Any]:
             "updatedAt": resource["updated_at"],
         },
     }
+
+
+
+class ApplicationResourceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace: str = Field(min_length=1, max_length=63)
+    spec: WorkloadRequest
+
+    @field_validator("workspace")
+    @classmethod
+    def valid_workspace(cls, value: str) -> str:
+        import re
+
+        value = value.strip().lower()
+        if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", value):
+            raise ValueError("Workspace must be a lowercase DNS label.")
+        return value

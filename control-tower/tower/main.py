@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import hmac
+import logging
 import re
+import threading
+import uuid
 from pathlib import Path
 from typing import Literal
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
@@ -27,6 +30,10 @@ from tower.runner import execute_job
 from tower.store import JobStore
 from tower.lifecycle import resume_replicas
 from tower.resource_guard import is_gamgee_managed
+from tower.resource_store import IdempotencyConflict, ResourceStore
+from tower.resource_engine import ResourceEngine
+from tower.resource_models import ApplicationResourceRequest, to_resource_document
+from tower.drivers.kubernetes_application import KubernetesApplicationDriver
 from tower.workloads import (
     ScaleRequest,
     WorkloadRequest,
@@ -64,6 +71,103 @@ def require_token(credentials: HTTPAuthorizationCredentials | None = Depends(bea
 
 def _store() -> JobStore:
     return JobStore(settings.database_path)
+
+
+def _resource_store() -> ResourceStore:
+    return ResourceStore(settings.database_path)
+
+
+def _resource_engine() -> ResourceEngine:
+    return ResourceEngine(_resource_store(), [KubernetesApplicationDriver()])
+
+
+def _application_resource(workspace: str, name: str) -> dict:
+    resource = _resource_store().find("Application", workspace, name)
+    if resource is None or resource["phase"] == "deleted":
+        raise HTTPException(status_code=404, detail="GAMGEE Application resource not found.")
+    return resource
+
+
+def _validate_tls_secret(namespace: str, secret_name: str) -> None:
+    try:
+        secret = get_json("secret", secret_name, namespace=namespace)
+    except ClusterNotFound as exc:
+        raise HTTPException(status_code=409, detail="The referenced TLS Secret does not exist in this workspace.") from exc
+    except ClusterError as exc:
+        raise _cluster_failure(exc) from exc
+    if secret.get("type") != "kubernetes.io/tls" or not {"tls.crt", "tls.key"}.issubset(secret.get("data", {})):
+        raise HTTPException(status_code=422, detail="The referenced Secret must be a valid kubernetes.io/tls Secret containing tls.crt and tls.key.")
+
+
+def _submit_application(
+    workspace: str,
+    request: WorkloadRequest,
+    idempotency_key: str | None = None,
+) -> dict:
+    namespace = _workspace_namespace(workspace)
+    if request.tls_secret:
+        _validate_tls_secret(namespace, request.tls_secret)
+    try:
+        resource, operation_id, replayed = _resource_engine().submit(
+            kind="Application",
+            workspace=workspace,
+            name=request.name,
+            desired=request.model_dump(mode="json"),
+            idempotency_key=idempotency_key,
+        )
+    except IdempotencyConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    observed = resource["observed"]
+    return {
+        "workspace": workspace,
+        "namespace": namespace,
+        "app": request.name,
+        "resource_id": resource["id"],
+        "generation": resource["generation"],
+        "operation_id": operation_id,
+        "status": resource["phase"],
+        "observed_status": observed.get("state"),
+        "private_by_default": request.hostname is None,
+        "public_url": f"https://{request.hostname}" if request.hostname else None,
+        "idempotent_replay": replayed,
+        "message": "GAMGEE accepted the desired state. The Resource Engine will reconcile it and retry transient failures.",
+    }
+
+
+_RESOURCE_STOP = threading.Event()
+_RESOURCE_THREAD: threading.Thread | None = None
+_RESOURCE_LOG = logging.getLogger("gamgee.resource-engine")
+
+
+def _resource_reconcile_loop() -> None:
+    while not _RESOURCE_STOP.is_set():
+        try:
+            result = _resource_engine().reconcile_due(limit=25)
+            _RESOURCE_STOP.wait(1 if result["claimed"] else 4)
+        except Exception:
+            _RESOURCE_LOG.exception("Resource Engine worker loop failed.")
+            _RESOURCE_STOP.wait(5)
+
+
+def _start_resource_worker() -> None:
+    global _RESOURCE_THREAD
+    if _RESOURCE_THREAD is not None and _RESOURCE_THREAD.is_alive():
+        return
+    _RESOURCE_STOP.clear()
+    _RESOURCE_THREAD = threading.Thread(
+        target=_resource_reconcile_loop,
+        name="gamgee-resource-reconciler",
+        daemon=True,
+    )
+    _RESOURCE_THREAD.start()
+
+
+def _stop_resource_worker() -> None:
+    _RESOURCE_STOP.set()
+    if _RESOURCE_THREAD is not None and _RESOURCE_THREAD.is_alive():
+        _RESOURCE_THREAD.join(timeout=5)
 
 
 def _cluster_failure(exc: ClusterError) -> HTTPException:
@@ -121,6 +225,16 @@ def _managed_deployment(workspace: str, app_name: str) -> tuple[str, dict]:
     if labels.get("gamgee.cloud/managed-by") != "gamgee" or labels.get("gamgee.cloud/tenant") != workspace:
         raise HTTPException(status_code=404, detail="GAMGEE app not found.")
     return namespace, item
+
+
+@app.on_event("startup")
+def start_resource_reconciler() -> None:
+    _start_resource_worker()
+
+
+@app.on_event("shutdown")
+def stop_resource_reconciler() -> None:
+    _stop_resource_worker()
 
 
 @app.get("/", include_in_schema=False)
@@ -259,6 +373,77 @@ def get_job(job_id: str):
     return job
 
 
+@app.get("/v1/resources", dependencies=[Depends(require_token)])
+def list_resources(
+    workspace: str | None = Query(default=None, min_length=1, max_length=63),
+    kind: str | None = Query(default="Application"),
+    include_deleted: bool = False,
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    if kind not in (None, "Application"):
+        raise HTTPException(status_code=422, detail="Only Application resources have a registered driver in this release.")
+    items = _resource_store().list(workspace=workspace, kind=kind, include_deleted=include_deleted, limit=limit)
+    return {"apiVersion": "gamgee.io/v1alpha1", "resources": [to_resource_document(item) for item in items]}
+
+
+@app.get("/v1/resources/{resource_id}", dependencies=[Depends(require_token)])
+def get_resource(resource_id: str, workspace: str = Query(min_length=1, max_length=63)):
+    item = _resource_store().get(resource_id)
+    if item is None or item["workspace"] != workspace:
+        raise HTTPException(status_code=404, detail="GAMGEE resource not found.")
+    return to_resource_document(item)
+
+
+@app.get("/v1/resources/{resource_id}/operations", dependencies=[Depends(require_token)])
+def list_resource_operations(resource_id: str, workspace: str = Query(min_length=1, max_length=63)):
+    item = _resource_store().get(resource_id)
+    if item is None or item["workspace"] != workspace:
+        raise HTTPException(status_code=404, detail="GAMGEE resource not found.")
+    return {"operations": _resource_store().list_operations(resource_id)}
+
+
+@app.get("/v1/resources/{resource_id}/events", dependencies=[Depends(require_token)])
+def list_resource_events(resource_id: str, workspace: str = Query(min_length=1, max_length=63)):
+    item = _resource_store().get(resource_id)
+    if item is None or item["workspace"] != workspace:
+        raise HTTPException(status_code=404, detail="GAMGEE resource not found.")
+    return {"events": _resource_store().events(resource_id)}
+
+
+@app.delete("/v1/resources/{resource_id}", status_code=202, dependencies=[Depends(require_token)])
+def delete_resource(
+    resource_id: str,
+    workspace: str = Query(min_length=1, max_length=63),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    try:
+        resource, operation_id, replayed = _resource_engine().delete(
+            resource_id,
+            workspace=workspace,
+            idempotency_key=idempotency_key,
+        )
+    except IdempotencyConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if resource is None:
+        raise HTTPException(status_code=404, detail="GAMGEE resource not found.")
+    return {
+        "resource_id": resource_id,
+        "operation_id": operation_id,
+        "generation": resource["generation"],
+        "status": resource["phase"],
+        "idempotent_replay": replayed,
+    }
+
+
+@app.post("/v1/resources/applications", status_code=202, dependencies=[Depends(require_token)])
+def create_application_resource(
+    request: ApplicationResourceRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    workspace = _validate_path_label(request.workspace, "Workspace")
+    return _submit_application(workspace, request.spec, idempotency_key)
+
+
 @app.get("/v1/tower/workspaces", dependencies=[Depends(require_token)])
 def list_workspaces():
     try:
@@ -306,131 +491,127 @@ def create_workspace(request: WorkspaceRequest):
 
 @app.get("/v1/tower/workspaces/{workspace}/apps", dependencies=[Depends(require_token)])
 def list_apps(workspace: str):
-    namespace = _workspace_namespace(workspace)
-    try:
-        result = get_json(
-            "deployments.apps",
-            namespace=namespace,
-            label_selector="gamgee.cloud/managed-by=gamgee",
-        )
-    except ClusterError as exc:
-        raise _cluster_failure(exc) from exc
+    _workspace_namespace(workspace)
+    resources = _resource_store().list(workspace=workspace, kind="Application", limit=500)
     apps = []
-    for item in result.get("items", []):
-        spec = item.get("spec", {})
-        status = item.get("status", {})
-        containers = item.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
+    for resource in resources:
+        desired = resource["desired"]
+        observed = resource["observed"]
+        phase = resource["phase"]
         apps.append(
             {
-                "name": item.get("metadata", {}).get("name"),
-                "image": containers[0].get("image") if containers else None,
-                "desired_replicas": spec.get("replicas", 1),
-                "ready_replicas": status.get("readyReplicas", 0),
-                "available_replicas": status.get("availableReplicas", 0),
-                "status": (
-                    "stopped" if spec.get("replicas", 1) == 0
-                    else "ready" if status.get("readyReplicas", 0) >= spec.get("replicas", 1)
-                    else "progressing"
-                ),
+                "name": resource["name"],
+                "resource_id": resource["id"],
+                "generation": resource["generation"],
+                "image": desired.get("image"),
+                "desired_replicas": desired.get("replicas", 1),
+                "ready_replicas": observed.get("ready_replicas", 0),
+                "available_replicas": observed.get("available_replicas", 0),
+                "status": "error" if phase == "error" else observed.get("state", phase),
+                "last_error": resource["last_error"],
             }
         )
-    return {"workspace": workspace, "namespace": namespace, "apps": apps}
+    return {"workspace": workspace, "namespace": f"{workspace}-production", "apps": apps}
 
 
-@app.post("/v1/tower/workspaces/{workspace}/apps", status_code=201, dependencies=[Depends(require_token)])
-def deploy_app(workspace: str, request: WorkloadRequest):
-    namespace = _workspace_namespace(workspace)
-
-    # Never adopt or overwrite same-named resources created outside GAMGEE.
-    for resource in ("deployment.apps", "service"):
-        _existing_resource(resource, request.name, namespace, workspace)
-    existing_ingress = _existing_resource("ingress", request.name, namespace, workspace)
-
-    if request.tls_secret:
-        try:
-            secret = get_json("secret", request.tls_secret, namespace=namespace)
-        except ClusterNotFound as exc:
-            raise HTTPException(status_code=409, detail="The referenced TLS Secret does not exist in this workspace.") from exc
-        except ClusterError as exc:
-            raise _cluster_failure(exc) from exc
-        if secret.get("type") != "kubernetes.io/tls" or not {"tls.crt", "tls.key"}.issubset(secret.get("data", {})):
-            raise HTTPException(status_code=422, detail="The referenced Secret must be a valid kubernetes.io/tls Secret containing tls.crt and tls.key.")
-
-    try:
-        if not request.hostname and existing_ingress:
-            # Removing public access is fail-closed: remove the prior GAMGEE route
-            # before applying the private-only application resources.
-            run_kubectl(["delete", f"ingress/{request.name}", "--namespace", namespace, "--ignore-not-found=true"])
-        apply_objects(build_workload_objects(workspace, request))
-    except ClusterError as exc:
-        raise _cluster_failure(exc) from exc
-    return {
-        "workspace": workspace,
-        "namespace": namespace,
-        "app": request.name,
-        "status": "deploying",
-        "private_by_default": request.hostname is None,
-        "public_url": f"https://{request.hostname}" if request.hostname else None,
-        "message": "GAMGEE has submitted the app. Check its readiness in the workspace view.",
-    }
+@app.post("/v1/tower/workspaces/{workspace}/apps", status_code=202, dependencies=[Depends(require_token)])
+def deploy_app(
+    workspace: str,
+    request: WorkloadRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    return _submit_application(_validate_path_label(workspace, "Workspace"), request, idempotency_key)
 
 
 @app.post("/v1/tower/workspaces/{workspace}/apps/{app_name}/scale", dependencies=[Depends(require_token)])
 def scale_app(workspace: str, app_name: str, request: ScaleRequest):
-    namespace, deployment = _managed_deployment(workspace, app_name)
-    try:
-        if request.replicas == 0:
-            previous = int(deployment.get("spec", {}).get("replicas", 1))
-            if previous > 0:
-                run_kubectl([
-                    "annotate", f"deployment/{app_name}",
-                    f"gamgee.cloud/previous-replicas={previous}",
-                    "--overwrite", "--namespace", namespace,
-                ])
-        run_kubectl(["scale", f"deployment/{app_name}", f"--replicas={request.replicas}", "--namespace", namespace])
-        if request.replicas > 0:
-            run_kubectl([
-                "annotate", f"deployment/{app_name}",
-                f"gamgee.cloud/previous-replicas={request.replicas}",
-                "--overwrite", "--namespace", namespace,
-            ])
-    except ClusterError as exc:
-        raise _cluster_failure(exc) from exc
-    status = "stopped" if request.replicas == 0 else "scaling"
-    return {"workspace": workspace, "app": app_name, "replicas": request.replicas, "status": status}
+    workspace = _validate_path_label(workspace, "Workspace")
+    resource = _application_resource(workspace, _validate_path_label(app_name, "App name"))
+    desired = dict(resource["desired"])
+    current_replicas = int(desired.get("replicas", 1))
+    if request.replicas == 0:
+        if current_replicas > 0:
+            desired["_gamgee_previous_replicas"] = current_replicas
+    else:
+        desired["_gamgee_previous_replicas"] = request.replicas
+    desired["replicas"] = request.replicas
+    engine = _resource_engine()
+    updated, operation_id, replayed = engine.submit(
+        kind="Application",
+        workspace=workspace,
+        name=resource["name"],
+        desired=desired,
+    )
+    return {
+        "resource_id": updated["id"],
+        "generation": updated["generation"],
+        "operation_id": operation_id,
+        "replicas": request.replicas,
+        "status": updated["phase"],
+        "idempotent_replay": replayed,
+    }
 
 
 @app.post("/v1/tower/workspaces/{workspace}/apps/{app_name}/resume", dependencies=[Depends(require_token)])
 def resume_app(workspace: str, app_name: str):
-    namespace, deployment = _managed_deployment(workspace, app_name)
-    target = resume_replicas(deployment)
-    try:
-        run_kubectl(["scale", f"deployment/{app_name}", f"--replicas={target}", "--namespace", namespace])
-    except ClusterError as exc:
-        raise _cluster_failure(exc) from exc
-    return {"workspace": workspace, "app": app_name, "replicas": target, "status": "resuming"}
+    workspace = _validate_path_label(workspace, "Workspace")
+    resource = _application_resource(workspace, _validate_path_label(app_name, "App name"))
+    desired = dict(resource["desired"])
+    target = int(desired.get("_gamgee_previous_replicas", max(1, int(desired.get("replicas", 1)))))
+    target = min(20, max(1, target))
+    desired["replicas"] = target
+    desired["_gamgee_previous_replicas"] = target
+    updated, operation_id, replayed = _resource_engine().submit(
+        kind="Application", workspace=workspace, name=resource["name"], desired=desired
+    )
+    return {
+        "resource_id": updated["id"],
+        "generation": updated["generation"],
+        "operation_id": operation_id,
+        "replicas": target,
+        "status": updated["phase"],
+        "idempotent_replay": replayed,
+    }
 
 
 @app.post("/v1/tower/workspaces/{workspace}/apps/{app_name}/restart", dependencies=[Depends(require_token)])
 def restart_app(workspace: str, app_name: str):
-    namespace, _ = _managed_deployment(workspace, app_name)
-    try:
-        run_kubectl(["rollout", "restart", f"deployment/{app_name}", "--namespace", namespace])
-    except ClusterError as exc:
-        raise _cluster_failure(exc) from exc
-    return {"workspace": workspace, "app": app_name, "status": "restarting"}
+    workspace = _validate_path_label(workspace, "Workspace")
+    resource = _application_resource(workspace, _validate_path_label(app_name, "App name"))
+    desired = dict(resource["desired"])
+    desired["_gamgee_restart_token"] = uuid.uuid4().hex
+    updated, operation_id, replayed = _resource_engine().submit(
+        kind="Application", workspace=workspace, name=resource["name"], desired=desired
+    )
+    return {
+        "resource_id": updated["id"],
+        "generation": updated["generation"],
+        "operation_id": operation_id,
+        "status": updated["phase"],
+        "idempotent_replay": replayed,
+    }
 
 
-@app.delete("/v1/tower/workspaces/{workspace}/apps/{app_name}", dependencies=[Depends(require_token)])
-def delete_app(workspace: str, app_name: str):
-    namespace, _ = _managed_deployment(workspace, app_name)
-    for resource in ("service", "ingress"):
-        _existing_resource(resource, app_name, namespace, workspace)
-    try:
-        delete_gamgee_app(app_name, namespace)
-    except ClusterError as exc:
-        raise _cluster_failure(exc) from exc
-    return {"workspace": workspace, "app": app_name, "status": "deleting"}
+@app.delete("/v1/tower/workspaces/{workspace}/apps/{app_name}", status_code=202, dependencies=[Depends(require_token)])
+def delete_app(
+    workspace: str,
+    app_name: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    workspace = _validate_path_label(workspace, "Workspace")
+    resource = _application_resource(workspace, _validate_path_label(app_name, "App name"))
+    deleted, operation_id, replayed = _resource_engine().delete(
+        resource["id"],
+        workspace=workspace,
+        idempotency_key=idempotency_key,
+    )
+    return {
+        "resource_id": resource["id"],
+        "generation": deleted["generation"] if deleted else None,
+        "operation_id": operation_id,
+        "status": deleted["phase"] if deleted else "not_found",
+        "idempotent_replay": replayed,
+    }
 
 
 @app.get("/readyz")

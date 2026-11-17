@@ -530,6 +530,41 @@ The interactive API schema is available at <http://127.0.0.1:8091/docs>.
 
 ---
 
+## 7.1 GAMGEE Resource Engine
+
+The Resource Engine is the desired-state layer behind Applications. It introduces a versioned GAMGEE resource envelope, a persistent desired/observed state store, generation tracking, operation records, idempotency keys, append-only resource events, and a background reconciliation worker.
+
+The first registered driver is **Application → Kubernetes**. The driver compiles the typed application specification into GAMGEE-owned Deployment, Service and optional Ingress resources. It checks both workspace ownership and the unique GAMGEE resource ID before changing or deleting an existing object. The HTTP request stores intent and returns an operation ID; it does not wait for Kubernetes convergence. Transient failures are recorded and retried with bounded exponential backoff.
+
+Resource API:
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/v1/resources/applications` | Create or update a versioned GAMGEE Application resource. Accepts optional `Idempotency-Key`. |
+| GET | `/v1/resources` | List resources, optionally filtered by workspace and kind. |
+| GET | `/v1/resources/{resource_id}` | Read desired state and observed status (workspace query required). |
+| GET | `/v1/resources/{resource_id}/operations` | Read generation-scoped operations and retry status. |
+| GET | `/v1/resources/{resource_id}/events` | Read resource lifecycle events. |
+| DELETE | `/v1/resources/{resource_id}` | Set deletion intent; the reconciler removes owned data-plane objects. |
+
+Application resource example:
+```json
+{
+  "workspace": "acme",
+  "spec": {
+    "name": "customer-api",
+    "image": "ghcr.io/example/customer-api:v1.4.2",
+    "port": 8080,
+    "replicas": 2,
+    "size": "standard",
+    "health_path": "/health"
+  }
+}
+```
+
+The canonical API version is `gamgee.io/v1alpha1`. The current release registers only the `Application` kind. Function, Machine, Service, Workspace, Route and Secret are planned resource kinds, not falsely advertised as operational drivers.
+
+The local reconciler runs in the Control Tower process. SQLite is the current single-node state backend. The schema is designed to keep desired state, observed state, operations and events separate; multi-replica Control Tower deployment will require a shared transactional database and distributed worker coordination before enabling multiple reconcilers.
+
 ## 8. Security model and current security gaps
 
 Security is a design requirement, not a checkbox profile.
@@ -736,7 +771,10 @@ The roadmap is intentionally capability-driven, not a commitment to recreate eve
 
 ### Unified GAMGEE resource control plane
 
-- [ ] Canonical CRD/API resource model for Workspace, Application, Function, Machine, Service, Route and Secret.
+- [x] Versioned GAMGEE Resource API and persistent desired/observed state for Applications.
+- [x] Generation-scoped operations, idempotency keys, lifecycle events and retrying reconciliation.
+- [x] First Kubernetes Application driver with unique resource ownership checks.
+- [ ] Canonical drivers and lifecycle contracts for Workspace, Function, Machine, Service, Route and Secret.
 - [ ] Continuous desired-state reconciliation and drift reporting.
 - [ ] Durable operation state machine with retries, cancellation, rollback and idempotency keys.
 - [ ] Immutable audit events and policy decision records.
