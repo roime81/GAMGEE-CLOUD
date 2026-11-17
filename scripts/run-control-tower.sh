@@ -20,16 +20,16 @@ fi
 export PATH="$ROOT/control-tower/.venv/bin:$PATH"
 export GAMGEE_TOWER_API_TOKEN
 GAMGEE_TOWER_API_TOKEN="$(cat "$TOKEN_FILE")"
-if [[ -z "$GAMGEE_TOWER_ALLOW_APPLY" ]]; then
+if ! printenv GAMGEE_TOWER_ALLOW_APPLY >/dev/null 2>&1; then
   export GAMGEE_TOWER_ALLOW_APPLY="false"
 fi
-if [[ -z "$GAMGEE_TOWER_HOST" ]]; then
+if ! printenv GAMGEE_TOWER_HOST >/dev/null 2>&1; then
   export GAMGEE_TOWER_HOST="127.0.0.1"
 fi
-if [[ -z "$GAMGEE_TOWER_PORT" ]]; then
+if ! printenv GAMGEE_TOWER_PORT >/dev/null 2>&1; then
   export GAMGEE_TOWER_PORT="8091"
 fi
-if [[ -z "$GAMGEE_TOWER_DB_PATH" ]]; then
+if ! printenv GAMGEE_TOWER_DB_PATH >/dev/null 2>&1; then
   export GAMGEE_TOWER_DB_PATH="$ROOT/control-tower/var/jobs.sqlite3"
 fi
 
