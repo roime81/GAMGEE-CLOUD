@@ -1,75 +1,221 @@
-# GAMGEE Control Tower Engineering Guide
+# GAMGEE Control Tower — Engineering and Operations Guide
 
 ## Status
 
-This commit adds the first executable Control Tower foundation and seven declarative installation profiles. It is an early engineering baseline, not a claim that every enterprise capability is complete.
+This guide describes the current engineering preview. The Control Tower now includes:
+- dependency-aware installation planning and approved Ansible execution
+- persistent SQLite installation job history
+- a white guided UI with a Core Cloud first-run path
+- Capsule workspace creation
+- deterministic stateless application compilation into Deployment, Service and optional TLS-backed Ingress
+- application list, scale/stop, restart and delete operations
+- cluster node status
+- a K3s worker join script
 
-## Security model
+This is a meaningful vertical slice, not a claim of a complete cloud operating system. Review the root README capability matrix and security limitations.
 
-- The API binds to 127.0.0.1 by default.
-- All management endpoints require a 256-bit bearer token.
-- The token is generated locally and stored in control-tower/.tower-token with mode 0600.
-- Mutations are disabled unless GAMGEE_TOWER_ALLOW_APPLY=true.
-- Apply requests require a fresh plan hash and approved=true.
-- The runner executes only Ansible playbooks located under automation/ansible.
-- Shell strings and commands are not accepted from API callers.
-- Do not expose the Tower port directly to the Internet. Put it behind an authenticated TLS reverse proxy or private access network.
-- The Control Tower host process is privileged because its playbooks manage host services. Run it only on a dedicated, trusted management node.
+## Process and trust boundary
+
+The guided installer registers gamgee-control-tower.service as a root service. It:
+- binds to 127.0.0.1:8091
+- reads a generated bearer token from a root-only environment file
+- records installation jobs in SQLite
+- uses the host kubeconfig at /etc/rancher/k3s/k3s.yaml when present
+- invokes repository-owned Ansible playbooks for installation profiles
+- invokes a fixed kubectl executable through tower.cluster
+
+Keep the process local. Use an SSH tunnel for remote access. The token is a privileged cloud-administration credential.
+
+The Control Tower runs as root in the current preview because selected installation playbooks manage host packages and services. A future split should separate:
+1. unprivileged API/intent service
+2. narrow privileged host executor
+3. Kubernetes service account for tenant/workload operations
+4. independently authenticated users and roles
 
 ## Install and run
 
-On a supported Ubuntu/Debian host:
+Guided installation on a fresh Debian/Ubuntu host:
+
+    sudo bash scripts/install-gamgee.sh
+
+The script installs prerequisites, prepares the virtual environment/token, writes /etc/gamgee/control-tower.env, registers the systemd unit and starts the service.
+
+Manual mode:
 
     sudo bash scripts/install-control-tower.sh
     sudo bash scripts/run-control-tower.sh
 
-The launcher starts in planning-only mode. To explicitly permit host changes, start it with:
+Manual mode defaults to planning-only. Explicitly enable applying an approved plan with:
 
     sudo env GAMGEE_TOWER_ALLOW_APPLY=true bash scripts/run-control-tower.sh
 
-Open http://127.0.0.1:8091 and read the API token from control-tower/.tower-token (use sudo cat when required). The UI displays whether apply is enabled.
+The guided installer enables apply for the local, loopback-bound service so the initial owner can approve installation in the UI. This does not authorize exposing the service to an untrusted network.
 
-The API is also documented at /docs. Health is available at /healthz.
+## Authentication
 
-## Planning API
+All /v1/tower/* endpoints require Authorization: Bearer <token>. The generated 256-bit random token is stored at control-tower/.tower-token, mode 0600. The guided installer also writes a root-only copy into /etc/gamgee/control-tower.env for systemd.
+
+There is one installation-level administrator token. There is no per-user OIDC, MFA, delegated role, tenant-scoped access token or access review workflow in this version.
+
+## API inventory
+
+### Health and cluster
+
+- GET /healthz
+- GET /readyz
+- GET /v1/tower/capabilities
+- GET /v1/tower/cloud/status
+
+### Installation
 
 - GET /v1/tower/profiles
-- POST /v1/tower/plan with {profiles:[...]}
-- POST /v1/tower/jobs with profiles, plan_hash, mode=dry-run|apply and approved=true for apply
+- POST /v1/tower/plan
+- POST /v1/tower/jobs
 - GET /v1/tower/jobs
-- GET /v1/tower/jobs/{id}
+- GET /v1/tower/jobs/{job_id}
 
-A plan includes dependency resolution, resource estimates, host preflight, required tool checks and a SHA-256 fingerprint. Generate a new plan after changing the selected profiles or bundle definitions.
+Plan body:
 
-## Profile implementation boundaries
+    {"profiles":["core-cloud","function-cloud"]}
 
-- Core Cloud runs the existing K3s/Capsule/Traefik/OpenCost bootstrap and verifies the Kubernetes API.
-- Function Cloud installs KEDA. The full GAMGEE Function API, WASM runtime controller and native function lifecycle are not delivered by this initial Control Tower slice.
-- Private IaaS installs Incus and QEMU and initialises the default Incus profile. VM guest capacity is additional to the platform estimate.
-- AI Enterprise starts the existing Docker Compose AI Factory after validating the local .env file. GPU configuration and model downloads remain explicit operator choices.
-- Enterprise Security installs Kyverno. OpenBao, certificate lifecycle, image signing enforcement and complete compliance policies remain subsequent integrations.
-- Federated Observability installs the VictoriaMetrics Kubernetes stack. Remote-site registration, tenant federation, trace/log backends and central multi-site routing remain subsequent integrations.
-- Hybrid Cloud validates a provider-neutral OpenTofu workspace. It deliberately does not create remote resources or handle cloud credentials.
+Apply body:
 
-## Resource sizing
+    {
+      "profiles":["core-cloud","function-cloud"],
+      "plan_hash":"<current-plan-hash>",
+      "mode":"apply",
+      "approved":true
+    }
 
-Bundle resource requirements are additive planning estimates, not guarantees. VM guests, model weights, data retention, backups and customer workloads require additional capacity. AI Enterprise CPU inference can need substantially more RAM; GPU VRAM is workload/model dependent.
+### Workspace
 
-## Rollback and recovery
+- GET /v1/tower/workspaces
+- POST /v1/tower/workspaces
 
-The first release does not automatically uninstall prerequisites or destroy state after a failed bundle. This is intentional: deleting a shared dependency or data volume can cause a wider outage.
+Body:
 
-- Helm-managed components should be rolled back with the recorded Helm release revision.
-- Docker Compose stacks should be stopped without the -v flag unless data deletion is explicitly approved.
-- Incus guests and storage pools are retained; do not run incus admin shutdown or delete storage pools as automatic rollback.
-- K3s teardown is never an automatic rollback action.
-- OpenTofu remote changes require a reviewed plan and provider-specific recovery; this initial hybrid profile performs validation only.
-- Inspect the job log and actual component state before retrying.
+    {"name":"acme","owner_email":"owner@example.com"}
+
+Workspace creation emits a Capsule Tenant with production and staging namespaces, resource quotas and tenant labels. The request returns while Capsule completes namespace reconciliation; the production namespace may not be ready immediately.
+
+### Application
+
+- GET /v1/tower/workspaces/{workspace}/apps
+- POST /v1/tower/workspaces/{workspace}/apps
+- POST /v1/tower/workspaces/{workspace}/apps/{app}/scale
+- POST /v1/tower/workspaces/{workspace}/apps/{app}/restart
+- DELETE /v1/tower/workspaces/{workspace}/apps/{app}
+
+Example body:
+
+    {
+      "name":"portal",
+      "image":"ghcr.io/example/portal:v1.2.3",
+      "port":8080,
+      "replicas":1,
+      "size":"small",
+      "health_path":"/"
+    }
+
+Size tiers:
+- small: requests 100m CPU / 128Mi memory; limits 500m / 512Mi
+- standard: requests 250m / 256Mi; limits 1 CPU / 1Gi
+- large: requests 500m / 512Mi; limits 2 CPU / 2Gi
+
+The request model rejects :latest, untagged image names, arbitrary extra fields and ports below 1024. Workspace/app names are DNS labels. Public hostname and TLS secret must be supplied together.
+
+## Application compiler and security profile
+
+The compiler creates:
+- apps/v1 Deployment
+- v1 ClusterIP Service
+- optional networking.k8s.io/v1 Ingress with Traefik class, websecure entrypoint and pre-existing TLS Secret
+
+Pod security:
+- ServiceAccount token automount disabled
+- RuntimeDefault seccomp
+- runAsNonRoot: true
+- allowPrivilegeEscalation: false
+- readOnlyRootFilesystem: true
+- all Linux capabilities dropped
+- only a bounded 64Mi /tmp emptyDir is writable by default
+- CPU/memory requests and limits selected from predefined tiers
+- HTTP readiness and liveness probes
+
+Application images must satisfy these constraints. An image expecting root, a writable root filesystem or extra capabilities will not run without a separately reviewed security design. There are no arbitrary command, hostPath, volume, secret or privileged-container fields in the API.
+
+The app API uses only the <workspace>-production namespace. It verifies the namespace has the gamgee.cloud/tenant label before applying or operating resources. Listing only returns Deployments labeled gamgee.cloud/managed-by=gamgee.
+
+Delete removes Deployment, Service and Ingress resources by validated app name. It does not remove volumes or data.
+
+## Kubernetes command adapter
+
+tower.cluster.run_kubectl:
+- resolves the executable using shutil.which
+- builds argv as a Python list
+- never invokes a shell
+- passes manifest YAML through stdin only for deterministic compiler output
+- applies a timeout
+- maps missing resources into ClusterNotFound
+- bounds error text returned by the API
+
+Callers must never pass user-supplied command arguments or manifest bodies directly to this adapter. Keep resource kinds, flags and operation choices fixed in code. Add a test for every new command path.
+
+## Installation execution
+
+The profile planner:
+- validates selected profile IDs
+- resolves dependencies
+- totals profile resource estimates
+- checks host CPU, available RAM, disk and required commands
+- checks source playbook/artifact paths are inside the repository
+- fingerprints profile data and source-file SHA-256 checksums
+
+The runner:
+- serializes host installation jobs
+- allows only repository playbooks under automation/ansible
+- enforces a maximum timeout
+- stores output in bounded SQLite logs
+- records failure without automatically destroying shared infrastructure
+
+Automatic destructive rollback is intentionally absent. Inspect the state of each component before retrying or repairing a failed installation.
+
+## Worker-node joining
+
+Run scripts/join-compute-node.sh as root on a new worker:
+
+    sudo bash scripts/join-compute-node.sh https://<control-plane-private-dns-or-ip>:6443
+
+It prompts for the node token without echo, stores no token file and downloads the official K3s installer over TLS. Set GAMGEE_K3S_VERSION to the exact server version to avoid version drift. Restrict cluster-control and CNI traffic to trusted private networks.
+
+This creates a K3s agent node only. It does not create an HA control plane, an Incus cluster, shared storage or node pools.
 
 ## Tests
 
-    cd control-tower
-    python -m pip install -r requirements.txt
-    PYTHONPATH=. python -m unittest discover -s tests -v
+    PYTHONPATH=control-tower python -m unittest discover -s control-tower/tests -v
 
-The GitHub Actions workflow runs the Control Tower unit tests and the existing AI service test suites.
+Tests cover profile loading/dependency resolution, planning, job persistence, playbook path safety, workload schema/compiler and Kubernetes adapter argv behavior.
+
+CI also runs AI service unit tests, shell syntax checks and Ansible syntax checks. CI does not provision a real K3s cluster. A disposable-VM acceptance test is required before a production rollout.
+
+## Recovery and data handling
+
+- Do not treat a failed install job as permission to run teardown.
+- Do not delete K3s state as an automatic rollback.
+- Do not run docker compose down -v unless the intention is to destroy AI Factory data volumes.
+- Do not delete a workspace namespace as an app rollback.
+- The Control Tower SQLite DB stores job history only; it is not a cluster backup.
+- The app API currently creates stateless Deployment/Service/Ingress resources only.
+- Back up K3s and application persistent data separately before production use.
+
+## Known production blockers
+
+1. Per-user OIDC/MFA and tenant-scoped authorization.
+2. Enforced NetworkPolicy support: the default Flannel CNI does not enforce Kubernetes NetworkPolicy objects.
+3. Least-privilege separation of API and privileged host executor.
+4. Secret management and certificate automation.
+5. Registry signature verification and workload admission policy.
+6. Automated backups and tested restore.
+7. Three-server HA control plane and API failover.
+8. End-to-end tests for real Capsule, K3s, app scheduling, ingress, TLS and node join.
+9. Immutable, identity-attributed audit trail.

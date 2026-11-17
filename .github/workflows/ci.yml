@@ -34,7 +34,9 @@ jobs:
         run: python -m unittest discover -s tests -t . -v
       - name: Shell syntax checks
         run: |
-          bash -n scripts/*.sh
+          for script in scripts/*.sh; do
+            bash -n "$script"
+          done
       - name: Check Ansible playbook syntax
         run: |
           for playbook in automation/ansible/*.yml; do
