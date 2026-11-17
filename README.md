@@ -414,6 +414,9 @@ This is the service-level network register for the current repository configurat
 | Capsule tenant controller | Kubernetes Service DNS in its installed namespace | Controller/chart-managed ports | Cluster-internal | Workspace/Tenant API is served through Kubernetes API; no separate GAMGEE public listener. |
 | Kyverno admission controller (optional) | Kubernetes Service DNS in namespace `kyverno` | Admission webhook `443/TCP` (service port) | Cluster-internal API-server-to-webhook path | Optional Enterprise Security profile; service IP is dynamically allocated. |
 | Incus daemon (optional Private IaaS foundation) | Host-local Unix socket by default | Unix socket; no TCP port opened by default | Host-local | Incus API is not exposed on a network listener by this installation playbook. |
+| VictoriaMetrics Kubernetes single-node (optional Observability profile) | `vmsingle-gamgee-observability` Service DNS in namespace `gamgee-observability` (confirm actual release name with `kubectl get svc -n gamgee-observability`) | `8428/TCP` HTTP API | ClusterIP; no host port configured by this profile | Helm chart service; ClusterIP is dynamically assigned. |
+| Grafana (optional Observability profile) | Grafana Service DNS in namespace `gamgee-observability` (discover with `kubectl get svc -n gamgee-observability`) | Chart service port; Grafana container normally listens on `3000/TCP` | ClusterIP; no host port configured by this profile | Enabled by `platform/observability/vmks-values.yaml`; exact service port/name follows pinned chart defaults. |
+| VictoriaMetrics Operator (optional Observability profile) | Operator Service DNS in namespace `gamgee-observability` | Chart-managed webhook/metrics ports; not explicitly pinned in repository values | ClusterIP; no host port configured by this profile | Discover actual ports with `kubectl get svc -n gamgee-observability -o wide` and `kubectl describe svc`. |
 
 **Docker Compose platform and AI Factory services**
 
@@ -429,6 +432,7 @@ The following ports are the service/container ports from the repository's Compos
 | VictoriaMetrics (Compose local metrics) | `victoria-metrics` | `8428/TCP` | `127.0.0.1:8428` | Localhost-published; 30-day retention in the current Compose file. |
 | AI Factory API | `ai-factory` | `8090/TCP` | `127.0.0.1:8090` | Localhost-published; FastAPI service. |
 | AI Factory integration worker | `integration-worker` | No inbound listener required by this Compose definition | None | Background NATS integration worker; calls AI Factory internally. |
+| AI Agent API image (optional standalone component) | Container/service DNS name chosen by the deployment; no Compose service is declared for it | `8080/TCP` (Dockerfile `EXPOSE 8080`) | None in the current Compose files | Image exists under `ai-agent/`; this repository's Compose stack does not start it or assign it an IP. |
 | NATS event bus (client) | `event-bus` | `4222/TCP` | None | Compose-internal event/messaging endpoint. |
 | NATS monitoring | `event-bus` | Not enabled in the current Compose command | None | No monitoring listener is configured in this repository definition. |
 | Qdrant vector database (HTTP) | `qdrant` | `6333/TCP` | None | Compose-internal vector API. |
