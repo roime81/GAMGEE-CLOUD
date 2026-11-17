@@ -15,7 +15,7 @@ def function_resource_name(workspace: str, name: str, resource_id: str) -> str:
     """Return a stable, collision-resistant Kubernetes name for this resource UUID."""
     prefix = f"fn-{workspace[:10]}-{name[:18]}".strip("-")
     suffix = re.sub(r"[^a-f0-9]", "", resource_id.lower())[:8]
-    return f"{prefix[:54].rstrip('-')}-{suffix}"
+    return f"{prefix[:50].rstrip('-')}-{suffix[:12]}"
 
 
 def _labels(workspace: str, resource_id: str, name: str) -> dict[str, str]:
@@ -45,6 +45,17 @@ def build_function_objects(resource: dict[str, Any]) -> list[dict[str, Any]]:
     if spec.get("hostname"):
         hosts.append(spec["hostname"])
 
+    service_account = {
+        "apiVersion": "v1",
+        "kind": "ServiceAccount",
+        "metadata": {
+            "name": key,
+            "namespace": namespace,
+            "labels": labels,
+        },
+        "automountServiceAccountToken": False,
+    }
+
     spin_app = {
         "apiVersion": "core.spinkube.dev/v1alpha1",
         "kind": "SpinApp",
@@ -57,6 +68,7 @@ def build_function_objects(resource: dict[str, Any]) -> list[dict[str, Any]]:
             "executor": "containerd-shim-spin",
             "image": spec["image"],
             "enableAutoscaling": True,
+            "serviceAccountName": key,
             "resources": {
                 "requests": {"cpu": "25m", "memory": "64Mi"},
                 "limits": {"cpu": "500m", "memory": "256Mi"},
@@ -79,6 +91,7 @@ def build_function_objects(resource: dict[str, Any]) -> list[dict[str, Any]]:
                 {"hosts": hosts, "paths": [{"value": path}]},
             ],
             "scalingMetric": {"concurrency": {"targetValue": spec["concurrency"]}},
+            "coldStart": {"maxPendingRequests": 100},
         },
     }
 
@@ -128,7 +141,7 @@ def build_function_objects(resource: dict[str, Any]) -> list[dict[str, Any]]:
 
     # The public Ingress belongs beside the shared interceptor service. The TLS
     # Secret is therefore intentionally looked up in the keda namespace.
-    objects = [spin_app, interceptor_route, proxy_service, scaled_object]
+    objects = [service_account, spin_app, interceptor_route, proxy_service, scaled_object]
     if spec.get("hostname") and spec.get("tls_secret"):
         objects.append(
             {
@@ -181,6 +194,7 @@ class KubernetesFunctionDriver:
     kind = "Function"
 
     _RESOURCE_TYPES = {
+        "ServiceAccount": "serviceaccount",
         "SpinApp": "spinapps.core.spinkube.dev",
         "InterceptorRoute": "interceptorroutes.http.keda.sh",
         "ScaledObject": "scaledobjects.keda.sh",
@@ -362,6 +376,7 @@ class KubernetesFunctionDriver:
 
         if workspace_available:
             for resource_type, name in (
+                ("serviceaccount", key),
                 ("spinapps.core.spinkube.dev", key),
                 ("interceptorroutes.http.keda.sh", key),
                 ("scaledobjects.keda.sh", key),
@@ -380,6 +395,7 @@ class KubernetesFunctionDriver:
                 ("interceptorroutes.http.keda.sh", key),
                 ("service", proxy_name),
                 ("spinapps.core.spinkube.dev", key),
+                ("serviceaccount", key),
             ):
                 run_kubectl(
                     ["delete", f"{resource_name}/{name}", "--namespace", namespace,
@@ -395,6 +411,7 @@ class KubernetesFunctionDriver:
                 ("interceptorroutes.http.keda.sh", key, "interceptorroute"),
                 ("scaledobjects.keda.sh", key, "scaledobject"),
                 ("service", proxy_name, "proxy_service"),
+                ("serviceaccount", key, "service_account"),
             ):
                 if self._existing(resource_type, name, namespace, resource) is not None:
                     remaining.append(label)
