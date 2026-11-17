@@ -614,7 +614,13 @@ def delete_app(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     workspace = _validate_path_label(workspace, "Workspace")
-    resource = _application_resource(workspace, _validate_path_label(app_name, "App name"))
+    resource = _resource_store().find(
+        "Application",
+        workspace,
+        _validate_path_label(app_name, "App name"),
+    )
+    if resource is None:
+        raise HTTPException(status_code=404, detail="GAMGEE Application resource not found.")
     deleted, operation_id, replayed = _resource_engine().delete(
         resource["id"],
         workspace=workspace,
