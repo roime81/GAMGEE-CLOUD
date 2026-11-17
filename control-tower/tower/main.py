@@ -33,7 +33,7 @@ from tower.lifecycle import resume_replicas
 from tower.resource_guard import is_gamgee_managed
 from tower.resource_store import IdempotencyConflict, ResourceStore
 from tower.resource_engine import ResourceEngine
-from tower.resource_models import ApplicationResourceRequest, FunctionResourceRequest, to_resource_document
+from tower.resource_models import ApplicationResourceRequest, FunctionResourceRequest, SUPPORTED_RESOURCE_KINDS, to_resource_document
 from tower.drivers.kubernetes_application import KubernetesApplicationDriver
 from tower.drivers.kubernetes_function import KubernetesFunctionDriver, function_resource_name
 from tower.workloads import (
@@ -434,8 +434,9 @@ def list_resources(
     include_deleted: bool = False,
     limit: int = Query(default=100, ge=1, le=500),
 ):
-    if kind not in (None, "Application"):
-        raise HTTPException(status_code=422, detail="Only Application resources have a registered driver in this release.")
+    if kind not in (None, *SUPPORTED_RESOURCE_KINDS):
+        supported = ", ".join(SUPPORTED_RESOURCE_KINDS)
+        raise HTTPException(status_code=422, detail=f"Unsupported resource kind. Registered kinds: {supported}.")
     items = _resource_store().list(workspace=workspace, kind=kind, include_deleted=include_deleted, limit=limit)
     return {"apiVersion": "gamgee.io/v1alpha1", "resources": [to_resource_document(item) for item in items]}
 
@@ -612,6 +613,37 @@ def list_functions(workspace: str):
             }
         )
     return {"workspace": workspace, "namespace": namespace, "functions": functions}
+
+
+
+@app.delete("/v1/tower/workspaces/{workspace}/functions/{function_name}", status_code=202, dependencies=[Depends(require_token)])
+def delete_function(
+    workspace: str,
+    function_name: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    workspace = _validate_path_label(workspace, "Workspace")
+    name = _validate_path_label(function_name, "Function name")
+    resource = _resource_store().find("Function", workspace, name)
+    if resource is None:
+        raise HTTPException(status_code=404, detail="GAMGEE Function resource not found.")
+    try:
+        deleted, operation_id, replayed = _resource_engine().delete(
+            resource["id"],
+            workspace=workspace,
+            idempotency_key=idempotency_key,
+        )
+    except IdempotencyConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "resource_id": resource["id"],
+        "generation": deleted["generation"] if deleted else None,
+        "operation_id": operation_id,
+        "status": deleted["phase"] if deleted else "not_found",
+        "idempotent_replay": replayed,
+    }
 
 
 @app.post("/v1/tower/workspaces/{workspace}/apps", status_code=202, dependencies=[Depends(require_token)])
