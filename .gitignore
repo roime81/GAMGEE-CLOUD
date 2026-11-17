@@ -10,3 +10,6 @@ htmlcov/
 control-tower/.venv/
 control-tower/.tower-token
 control-tower/var/
+
+# OpenTofu local working data
+**/.terraform/
