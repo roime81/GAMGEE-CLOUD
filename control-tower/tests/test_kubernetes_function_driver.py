@@ -105,6 +105,22 @@ class KubernetesFunctionDriverTests(unittest.TestCase):
         kinds = [call.args[0]["kind"] for call in apply_mock.call_args_list]
         self.assertEqual(kinds, ["ServiceAccount", "SpinApp", "InterceptorRoute", "Service", "ScaledObject"])
 
+    @patch("tower.drivers.kubernetes_function.run_kubectl")
+    @patch("tower.drivers.kubernetes_function.apply_object")
+    def test_private_update_waits_until_old_public_ingress_is_absent(self, apply_mock, run_mock):
+        resource = sample_resource()
+        driver = KubernetesFunctionDriver()
+        with patch.object(driver, "_workspace_namespace", return_value="acme-production"), \
+             patch.object(driver, "_check_runtime"), \
+             patch.object(driver, "_existing", side_effect=[None] * 5 + [{"metadata": {"name": "old-public-route"}}] * 2), \
+             patch.object(driver, "observe", return_value={"state": "ready"}):
+            observed = driver.reconcile(resource)
+
+        self.assertEqual(observed["state"], "progressing")
+        self.assertEqual(observed["public_route"], "deleting")
+        run_mock.assert_called_once()
+        self.assertEqual(apply_mock.call_count, 5)
+
     @patch("tower.drivers.kubernetes_function.apply_object")
     @patch("tower.drivers.kubernetes_function.get_json")
     def test_reconcile_refuses_to_adopt_foreign_spinapp(self, get_json_mock, apply_mock):
