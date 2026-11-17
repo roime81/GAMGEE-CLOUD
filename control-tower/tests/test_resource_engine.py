@@ -30,6 +30,13 @@ class FakeDriver:
             )
         if resource["desired"].get("deleted"):
             return {"state": "deleted"}
+        if self.calls[-1][0] == 1 and self.update_during_reconcile is False and getattr(self, "progress_once", False):
+            self.progress_once = False
+            return {"state": "progressing", "ready_replicas": 0}
+        return {"state": "ready", "ready_replicas": resource["desired"].get("replicas", 1)}
+
+    def observe(self, resource):
+        self.calls.append(("observe", resource["generation"]))
         return {"state": "ready", "ready_replicas": resource["desired"].get("replicas", 1)}
 
 
@@ -98,6 +105,29 @@ class ResourceEngineTests(unittest.TestCase):
         self.assertEqual(final["phase"], "ready")
         self.assertEqual(final["observed_generation"], 2)
         self.assertEqual(final["observed"]["ready_replicas"], 2)
+
+    def test_progressing_resource_is_observed_until_ready_without_reapplying(self):
+        driver = FakeDriver()
+        driver.progress_once = True
+        engine = ResourceEngine(self.store, [driver])
+        resource, _, _ = engine.submit(
+            kind="Application",
+            workspace="acme",
+            name="portal",
+            desired={"image": "nginx:1.27", "replicas": 1},
+        )
+        first = engine.reconcile_due()
+        self.assertEqual(first["succeeded"], 1)
+        self.assertEqual(self.store.get(resource["id"])["phase"], "progressing")
+        with self.store._connection() as connection:
+            connection.execute(
+                "UPDATE resources SET next_attempt_at=? WHERE id=?",
+                ("2000-01-01T00:00:00+00:00", resource["id"]),
+            )
+        second = engine.reconcile_due()
+        self.assertEqual(second["succeeded"], 1)
+        self.assertEqual(self.store.get(resource["id"])["phase"], "ready")
+        self.assertEqual(driver.calls[-1][0], "observe")
 
     def test_unregistered_resource_kind_is_rejected(self):
         engine = ResourceEngine(self.store, [FakeDriver()])

@@ -67,14 +67,24 @@ class ResourceEngine:
             try:
                 if driver is None:
                     raise RuntimeError(f"No driver is registered for kind '{resource['kind']}'.")
-                observed = driver.reconcile(resource)
+                if resource.get("claimed_from_phase") == "progressing" and hasattr(driver, "observe"):
+                    observed = driver.observe(resource)
+                else:
+                    observed = driver.reconcile(resource)
                 deleted = bool(resource["desired"].get("deleted"))
-                self.store.mark_success(
-                    resource_id=resource["id"],
-                    generation=resource["generation"],
-                    observed=observed,
-                    deleted=deleted,
-                )
+                if not deleted and observed.get("state") == "progressing":
+                    self.store.mark_progress(
+                        resource_id=resource["id"],
+                        generation=resource["generation"],
+                        observed=observed,
+                    )
+                else:
+                    self.store.mark_success(
+                        resource_id=resource["id"],
+                        generation=resource["generation"],
+                        observed=observed,
+                        deleted=deleted,
+                    )
                 succeeded += 1
             except Exception as exc:
                 logger.exception(

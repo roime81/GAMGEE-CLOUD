@@ -534,7 +534,7 @@ The interactive API schema is available at <http://127.0.0.1:8091/docs>.
 
 The Resource Engine is the desired-state layer behind Applications. It introduces a versioned GAMGEE resource envelope, a persistent desired/observed state store, generation tracking, operation records, idempotency keys, append-only resource events, and a background reconciliation worker.
 
-The first registered driver is **Application → Kubernetes**. The driver compiles the typed application specification into GAMGEE-owned Deployment, Service and optional Ingress resources. It checks both workspace ownership and the unique GAMGEE resource ID before changing or deleting an existing object. The HTTP request stores intent and returns an operation ID; it does not wait for Kubernetes convergence. Transient failures are recorded and retried with bounded exponential backoff.
+The first registered driver is **Application → Kubernetes**. The engine continues observing a workload while it is progressing, and periodically re-applies ready resources to repair drift. The driver compiles the typed application specification into GAMGEE-owned Deployment, Service and optional Ingress resources. It checks both workspace ownership and the unique GAMGEE resource ID before changing or deleting an existing object. The HTTP request stores intent and returns an operation ID; it does not wait for Kubernetes convergence. Transient failures are recorded and retried with bounded exponential backoff.
 
 Resource API:
 | Method | Path | Purpose |

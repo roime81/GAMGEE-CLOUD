@@ -79,29 +79,46 @@ class KubernetesApplicationDriver:
                 raise RuntimeError("The referenced Secret is not a valid Kubernetes TLS Secret.")
 
         apply_objects(objects)
+        return self.observe(resource)
 
+    def observe(self, resource: dict[str, Any]) -> dict[str, Any]:
+        workspace = resource["workspace"]
+        name = resource["name"]
+        namespace = self._workspace_namespace(workspace)
         deployment = get_json("deployment.apps", name, namespace=namespace)
+        if not is_gamgee_managed(deployment, workspace) or not is_gamgee_resource(deployment, resource["id"]):
+            raise RuntimeError("Application Deployment is no longer owned by this GAMGEE resource.")
+
         status = deployment.get("status", {})
         spec = deployment.get("spec", {})
-        containers = (
-            deployment.get("spec", {})
-            .get("template", {})
-            .get("spec", {})
-            .get("containers", [])
-        )
+        template = deployment.get("spec", {}).get("template", {}).get("spec", {})
+        containers = template.get("containers", [])
         desired_replicas = int(spec.get("replicas", 1))
         ready_replicas = int(status.get("readyReplicas", 0))
+        conditions = status.get("conditions", [])
+        failed_condition = next(
+            (
+                item for item in conditions
+                if item.get("type") == "Progressing"
+                and item.get("status") == "False"
+                and item.get("reason") == "ProgressDeadlineExceeded"
+            ),
+            None,
+        )
+        if failed_condition:
+            raise RuntimeError("Kubernetes Deployment exceeded its progress deadline.")
         state = "stopped" if desired_replicas == 0 else (
             "ready" if ready_replicas >= desired_replicas else "progressing"
         )
+        desired = resource["desired"]
         return {
             "state": state,
             "namespace": namespace,
             "desired_replicas": desired_replicas,
             "ready_replicas": ready_replicas,
             "available_replicas": int(status.get("availableReplicas", 0)),
-            "image": containers[0].get("image") if containers else request.image,
-            "private_by_default": request.hostname is None,
-            "url": f"https://{request.hostname}" if request.hostname else None,
+            "image": containers[0].get("image") if containers else None,
+            "private_by_default": desired.get("hostname") is None,
+            "url": f"https://{desired['hostname']}" if desired.get("hostname") else None,
             "kubernetes_generation": deployment.get("metadata", {}).get("generation"),
         }

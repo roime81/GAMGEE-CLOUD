@@ -430,7 +430,7 @@ class ResourceStore:
             rows = connection.execute(
                 """
                 SELECT * FROM resources
-                WHERE phase IN ('pending', 'error', 'deleting') AND next_attempt_at<=?
+                WHERE phase IN ('pending', 'error', 'deleting', 'progressing', 'ready') AND next_attempt_at<=?
                 ORDER BY created_at ASC LIMIT ?
                 """,
                 (now, max(1, min(limit, 100))),
@@ -465,6 +465,7 @@ class ResourceStore:
                 )
                 result = self._get_in(connection, resource_id)
                 result["operation_id"] = operation["id"]
+                result["claimed_from_phase"] = row["phase"]
                 claimed.append(result)
             connection.commit()
         return claimed
@@ -487,13 +488,14 @@ class ResourceStore:
             current_generation = int(row["generation"])
             phase = ("deleted" if deleted else "ready") if current_generation == generation else "pending"
             deleted_at = now if deleted and current_generation == generation else None
+            next_attempt = _stamp(utc_now() + timedelta(seconds=60)) if phase == "ready" else now
             connection.execute(
                 """
                 UPDATE resources SET observed_json=?, observed_generation=?,
                     phase=?, retry_count=0, next_attempt_at=?, last_error=NULL,
                     deleted_at=COALESCE(?, deleted_at), updated_at=? WHERE id=?
                 """,
-                (_canonical(observed), generation, phase, now, deleted_at, now, resource_id),
+                (_canonical(observed), generation, phase, next_attempt, deleted_at, now, resource_id),
             )
             connection.execute(
                 """
@@ -510,6 +512,62 @@ class ResourceStore:
                 observed,
                 now,
             )
+            connection.commit()
+
+    def mark_progress(
+        self,
+        *,
+        resource_id: str,
+        generation: int,
+        observed: dict[str, Any],
+        poll_seconds: int = 5,
+    ) -> None:
+        """Persist an applied-but-not-ready observation and schedule another status check."""
+        now_dt = utc_now()
+        now = _stamp(now_dt)
+        next_attempt = _stamp(now_dt + timedelta(seconds=max(2, min(poll_seconds, 30))))
+        with self._lock, self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT generation, observed_json FROM resources WHERE id=?",
+                (resource_id,),
+            ).fetchone()
+            if row is None:
+                connection.commit()
+                return
+            current_generation = int(row["generation"])
+            if current_generation != generation:
+                connection.execute(
+                    "UPDATE resources SET phase='pending', next_attempt_at=?, updated_at=? WHERE id=?",
+                    (now, now, resource_id),
+                )
+                connection.commit()
+                return
+            changed = json.loads(row["observed_json"]) != observed
+            connection.execute(
+                """
+                UPDATE resources SET observed_json=?, observed_generation=?,
+                    phase='progressing', retry_count=0, next_attempt_at=?,
+                    last_error=NULL, updated_at=? WHERE id=?
+                """,
+                (_canonical(observed), generation, next_attempt, now, resource_id),
+            )
+            connection.execute(
+                """
+                UPDATE resource_operations SET status='waiting', result_json=?, updated_at=?
+                WHERE resource_id=? AND generation=?
+                """,
+                (_canonical(observed), now, resource_id, generation),
+            )
+            if changed:
+                self._record_event(
+                    connection,
+                    resource_id,
+                    generation,
+                    "reconcile.progressing",
+                    observed,
+                    now,
+                )
             connection.commit()
 
     def mark_failure(self, *, resource_id: str, generation: int, error: str) -> None:
