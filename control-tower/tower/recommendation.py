@@ -1,16 +1,37 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
+
+from tower.catalog import load_catalog, resolve_profiles
 
 
-BASE_PROFILES = [
-    "core-cloud",
-    "function-cloud",
-    "enterprise-security",
-    "federated-observability",
-]
+def detect_host_capacity(repository_root: Path) -> dict[str, float | int | None]:
+    """Report local capacity using the same conservative signals as plan preflight."""
+    available_ram: float | None = None
+    meminfo = Path("/proc/meminfo")
+    if meminfo.is_file():
+        try:
+            for line in meminfo.read_text(encoding="ascii", errors="ignore").splitlines():
+                if line.startswith("MemAvailable:"):
+                    available_ram = round(int(line.split()[1]) / 1024 / 1024, 1)
+                    break
+        except (OSError, ValueError, IndexError):
+            available_ram = None
+
+    try:
+        free_disk = round(shutil.disk_usage(repository_root).free / (1024**3), 1)
+    except OSError:
+        free_disk = 0.0
+
+    return {
+        "vcpu": os.cpu_count() or 1,
+        "available_ram_gib": available_ram,
+        "free_disk_gib": free_disk,
+    }
 
 
 def _configured_ai_env(path: Path) -> bool:
@@ -75,45 +96,139 @@ def ai_factory_ready(repository_root: Path) -> bool:
     return compose.returncode == 0 and daemon.returncode == 0 and bool(daemon.stdout.strip())
 
 
-def recommend_local_bundle(*, kvm_available: bool, ai_available: bool) -> dict:
-    profiles = list(BASE_PROFILES)
+def _resource_total(profile_ids: list[str], catalog: dict[str, dict[str, Any]]) -> dict[str, int]:
+    ordered = resolve_profiles(profile_ids, catalog)
+    return {
+        "vcpu": sum(catalog[name]["resources"]["minimum_vcpu"] for name in ordered),
+        "ram_gib": sum(catalog[name]["resources"]["minimum_ram_gib"] for name in ordered),
+        "disk_gib": sum(catalog[name]["resources"]["minimum_disk_gib"] for name in ordered),
+    }
+
+
+def _capacity_gaps(required: dict[str, int], capacity: dict[str, float | int | None]) -> list[str]:
+    gaps = []
+    if int(capacity.get("vcpu") or 0) < required["vcpu"]:
+        gaps.append(f"CPU needs {required['vcpu']} vCPU; host reports {capacity.get('vcpu')}.")
+    available_ram = capacity.get("available_ram_gib")
+    if available_ram is None:
+        gaps.append("Available memory could not be measured safely.")
+    elif float(available_ram) < required["ram_gib"]:
+        gaps.append(f"Memory needs {required['ram_gib']} GiB available; host reports {available_ram} GiB.")
+    if float(capacity.get("free_disk_gib") or 0) < required["disk_gib"]:
+        gaps.append(f"Disk needs {required['disk_gib']} GiB free; host reports {capacity.get('free_disk_gib')} GiB.")
+    return gaps
+
+
+def recommend_local_bundle(
+    *,
+    kvm_available: bool,
+    ai_available: bool,
+    host_capacity: dict[str, float | int | None],
+) -> dict:
+    """Select the richest local bundle that fits this host, without blocking Core Cloud."""
+    catalog = load_catalog()
+    selected = ["core-cloud"]
     included = [
-        {"id": "core-cloud", "name": "Core Cloud", "reason": "Container platform, tenant boundary, ingress and base cost visibility."},
-        {"id": "function-cloud", "name": "Function Cloud", "reason": "KEDA event-driven scaling foundation."},
-        {"id": "enterprise-security", "name": "Security foundation", "reason": "Kyverno admission-policy foundation."},
-        {"id": "federated-observability", "name": "Local observability", "reason": "VictoriaMetrics and Grafana starter stack on this cell."},
+        {
+            "id": "core-cloud",
+            "name": "Core Cloud",
+            "reason": "The smallest required GAMGEE cell: container runtime, tenancy, ingress and base cost visibility.",
+        }
     ]
     skipped = []
 
+    candidates = [
+        (
+            "enterprise-security",
+            "Security foundation",
+            "Kyverno admission-policy foundation.",
+            True,
+        ),
+        (
+            "function-cloud",
+            "Function Cloud foundation",
+            "KEDA event-driven scaling foundation.",
+            True,
+        ),
+    ]
+
     if kvm_available:
-        profiles.append("private-iaas")
-        included.append(
-            {"id": "private-iaas", "name": "Private IaaS foundation", "reason": "KVM is available; Incus/QEMU packages and host initialization will be installed. GAMGEE VM lifecycle APIs are a later milestone."}
+        candidates.append(
+            (
+                "private-iaas",
+                "Private IaaS foundation",
+                "KVM is available; Incus/QEMU packages and host initialization will be installed. GAMGEE VM lifecycle APIs are a later milestone.",
+                True,
+            )
         )
     else:
         skipped.append(
-            {"id": "private-iaas", "name": "Private IaaS foundation", "reason": "KVM was not detected. Enable nested/hardware virtualisation and expose /dev/kvm to install the Incus/QEMU foundation."}
+            {
+                "id": "private-iaas",
+                "name": "Private IaaS foundation",
+                "reason": "KVM was not detected. Enable nested/hardware virtualisation and expose /dev/kvm to install the Incus/QEMU foundation.",
+            }
         )
+
+    candidates.append(
+        (
+            "federated-observability",
+            "Local observability",
+            "VictoriaMetrics and Grafana starter stack on this cell.",
+            True,
+        )
+    )
 
     if ai_available:
-        profiles.append("ai-enterprise")
-        included.append(
-            {"id": "ai-enterprise", "name": "Private AI Factory", "reason": "Docker Compose and required non-placeholder secrets are ready."}
+        candidates.append(
+            (
+                "ai-enterprise",
+                "Private AI Factory",
+                "Docker Compose and required owner-only, non-placeholder secrets are ready.",
+                True,
+            )
         )
     else:
         skipped.append(
-            {"id": "ai-enterprise", "name": "Private AI Factory", "reason": "Not auto-included. It requires a running Docker Engine, Docker Compose v2 and configured secrets in the repository .env file."}
+            {
+                "id": "ai-enterprise",
+                "name": "Private AI Factory",
+                "reason": "Not auto-included. It requires a running Docker Engine, Docker Compose v2 and configured mode-0600 secrets in the repository .env file.",
+            }
         )
 
+    for profile_id, name, reason, _enabled in candidates:
+        trial = selected + [profile_id]
+        required = _resource_total(trial, catalog)
+        gaps = _capacity_gaps(required, host_capacity)
+        if gaps:
+            skipped.append(
+                {
+                    "id": profile_id,
+                    "name": name,
+                    "reason": "Not added to this host's one-click bundle to preserve headroom: " + " ".join(gaps),
+                    "required_resources": required,
+                }
+            )
+            continue
+        selected.append(profile_id)
+        included.append({"id": profile_id, "name": name, "reason": reason})
+
     skipped.append(
-        {"id": "hybrid-cloud", "name": "Hybrid Cloud", "reason": "Not included in a local one-click install. The current provider adapter is a validation scaffold and must not imply that remote cloud resources are provisioned."}
+        {
+            "id": "hybrid-cloud",
+            "name": "Hybrid Cloud",
+            "reason": "Not included in a local one-click install. The current provider adapter is a validation scaffold and does not provision remote cloud resources.",
+        }
     )
 
     return {
         "bundle": "gamgee-local-cloud",
         "name": "GAMGEE Local Cloud",
-        "profiles": profiles,
+        "profiles": selected,
         "included": included,
         "skipped": skipped,
-        "note": "This composes the local capabilities that the host can support. The plan still checks total CPU, memory, disk, tools and KVM before any installation starts.",
+        "host_capacity": host_capacity,
+        "required_resources": _resource_total(selected, catalog),
+        "note": "Core Cloud remains the stable minimum. Optional capabilities are added only when measured CPU, available memory and free disk can support them. The full plan performs a second preflight before any host changes.",
     }

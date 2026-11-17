@@ -21,7 +21,7 @@ from tower.cluster import (
     run_kubectl,
 )
 from tower.config import ROOT, STATIC_DIR, settings
-from tower.recommendation import ai_factory_ready, recommend_local_bundle
+from tower.recommendation import ai_factory_ready, detect_host_capacity, recommend_local_bundle
 from tower.planner import build_plan
 from tower.runner import execute_job
 from tower.store import JobStore
@@ -180,6 +180,7 @@ def cloud_recommendation():
     return recommend_local_bundle(
         kvm_available=Path("/dev/kvm").exists(),
         ai_available=ai_factory_ready(ROOT),
+        host_capacity=detect_host_capacity(ROOT),
     )
 
 
