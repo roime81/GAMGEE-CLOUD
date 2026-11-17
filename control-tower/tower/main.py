@@ -33,8 +33,9 @@ from tower.lifecycle import resume_replicas
 from tower.resource_guard import is_gamgee_managed
 from tower.resource_store import IdempotencyConflict, ResourceStore
 from tower.resource_engine import ResourceEngine
-from tower.resource_models import ApplicationResourceRequest, to_resource_document
+from tower.resource_models import ApplicationResourceRequest, FunctionResourceRequest, to_resource_document
 from tower.drivers.kubernetes_application import KubernetesApplicationDriver
+from tower.drivers.kubernetes_function import KubernetesFunctionDriver, function_resource_name
 from tower.workloads import (
     ScaleRequest,
     WorkloadRequest,
@@ -85,7 +86,10 @@ def _resource_store() -> ResourceStore:
 
 
 def _resource_engine() -> ResourceEngine:
-    return ResourceEngine(_resource_store(), [KubernetesApplicationDriver()])
+    return ResourceEngine(
+        _resource_store(),
+        [KubernetesApplicationDriver(), KubernetesFunctionDriver()],
+    )
 
 
 def _application_resource(workspace: str, name: str) -> dict:
@@ -144,6 +148,45 @@ def _submit_application(
         "public_url": f"https://{request.hostname}" if request.hostname else None,
         "idempotent_replay": replayed,
         "message": "GAMGEE accepted the desired state. The Resource Engine will reconcile it and retry transient failures.",
+    }
+
+def _submit_function(
+    workspace: str,
+    request: FunctionResourceRequest,
+    idempotency_key: str | None = None,
+) -> dict:
+    namespace = _workspace_namespace(workspace)
+    spec = request.spec
+    try:
+        resource, operation_id, replayed = _resource_engine().submit(
+            kind="Function",
+            workspace=workspace,
+            name=spec.name,
+            desired=spec.model_dump(mode="json"),
+            idempotency_key=idempotency_key,
+        )
+    except IdempotencyConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    function_key = function_resource_name(workspace, spec.name, resource["id"])
+    proxy_name = f"{function_key}-proxy"
+    return {
+        "workspace": workspace,
+        "namespace": namespace,
+        "function": spec.name,
+        "resource_id": resource["id"],
+        "generation": resource["generation"],
+        "operation_id": operation_id,
+        "runtime": "spin-wasm",
+        "status": resource["phase"],
+        "internal_url": f"http://{proxy_name}.{namespace}.svc.cluster.local:8080{spec.path}",
+        "public_url": f"https://{spec.hostname}{spec.path}" if spec.hostname else None,
+        "min_replicas": spec.min_replicas,
+        "max_replicas": spec.max_replicas,
+        "idempotent_replay": replayed,
+        "message": "GAMGEE accepted the Function intent. SpinKube will run the published WASM artifact and KEDA will scale it from HTTP demand.",
     }
 
 
@@ -457,6 +500,16 @@ def create_application_resource(
     return _submit_application(workspace, request.spec, idempotency_key)
 
 
+
+@app.post("/v1/resources/functions", status_code=202, dependencies=[Depends(require_token)])
+def create_function_resource(
+    request: FunctionResourceRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    workspace = _validate_path_label(request.workspace, "Workspace")
+    return _submit_function(workspace, request, idempotency_key)
+
+
 @app.get("/v1/tower/workspaces", dependencies=[Depends(require_token)])
 def list_workspaces():
     try:
@@ -528,6 +581,37 @@ def list_apps(workspace: str):
             }
         )
     return {"workspace": workspace, "namespace": f"{workspace}-production", "apps": apps}
+
+
+@app.get("/v1/tower/workspaces/{workspace}/functions", dependencies=[Depends(require_token)])
+def list_functions(workspace: str):
+    namespace = _workspace_namespace(workspace)
+    resources = _resource_store().list(workspace=workspace, kind="Function", limit=500)
+    functions = []
+    for resource in resources:
+        desired = resource["desired"]
+        observed = resource["observed"]
+        functions.append(
+            {
+                "name": resource["name"],
+                "resource_id": resource["id"],
+                "generation": resource["generation"],
+                "image": desired.get("image"),
+                "runtime": "spin-wasm",
+                "min_replicas": desired.get("min_replicas", 0),
+                "max_replicas": desired.get("max_replicas", 10),
+                "ready_replicas": observed.get("ready_replicas", 0),
+                "state": (
+                    resource["phase"]
+                    if resource["phase"] in {"pending", "reconciling", "progressing", "deleting", "error"}
+                    else observed.get("state", resource["phase"])
+                ),
+                "internal_url": observed.get("internal_url"),
+                "public_url": observed.get("public_url"),
+                "last_error": resource["last_error"],
+            }
+        )
+    return {"workspace": workspace, "namespace": namespace, "functions": functions}
 
 
 @app.post("/v1/tower/workspaces/{workspace}/apps", status_code=202, dependencies=[Depends(require_token)])
