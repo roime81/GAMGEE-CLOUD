@@ -12,6 +12,8 @@ class ResourceApiRegistrationTests(unittest.TestCase):
         }
         expected = {
             ("POST", "/v1/resources/applications"),
+            ("POST", "/v1/resources/functions"),
+            ("GET", "/v1/tower/workspaces/{workspace}/functions"),
             ("GET", "/v1/resources"),
             ("GET", "/v1/resources/{resource_id}"),
             ("GET", "/v1/resources/{resource_id}/operations"),
