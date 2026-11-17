@@ -147,7 +147,7 @@ Pod security:
 
 Application images must satisfy these constraints. An image expecting root, a writable root filesystem or extra capabilities will not run without a separately reviewed security design. There are no arbitrary command, hostPath, volume, secret or privileged-container fields in the API.
 
-The app API uses only the <workspace>-production namespace. It verifies the namespace has the gamgee.cloud/tenant label before applying or operating resources. Listing only returns Deployments labeled gamgee.cloud/managed-by=gamgee.
+The app API uses only the validated workspace production namespace. It verifies the namespace has the gamgee.cloud/tenant label before applying or operating resources. Existing same-named Deployments, Services and Ingresses must be labeled as GAMGEE-managed and must belong to the same workspace; the API refuses to adopt or delete foreign resources. Listing only returns Deployments labeled gamgee.cloud/managed-by=gamgee.
 
 Delete removes Deployment, Service and Ingress resources by validated app name. It does not remove volumes or data.
 

@@ -498,7 +498,7 @@ Optional TLS-backed public route fields:
       "tls_secret": "api-example-com-tls"
     }
 
-The hostname and TLS secret must be supplied together. The secret must already exist in the target production namespace. An application with neither field remains private behind a ClusterIP Service.
+The hostname and TLS secret must be supplied together. The secret must already exist in the target production namespace and must be type kubernetes.io/tls with tls.crt and tls.key data. GAMGEE verifies this before applying the route. An application with neither field remains private behind a ClusterIP Service. When updating an existing app, GAMGEE refuses to adopt same-named Deployment, Service or Ingress resources unless they carry GAMGEE's managed-by label and matching workspace label.
 
 ### Example API calls
 
@@ -542,6 +542,8 @@ Security is a design requirement, not a checkbox profile.
 - Workspace and application inputs are strongly typed and reject unknown fields.
 - Application names and workspace names are DNS-validated.
 - The app compiler does not accept arbitrary commands, volumes, host paths, capabilities, service accounts or container security-context overrides.
+- Existing same-named Deployment, Service and Ingress resources must have GAMGEE ownership and workspace labels before an update or delete is permitted.
+- A public route is created only after checking that the referenced in-namespace Secret is type kubernetes.io/tls and contains tls.crt and tls.key.
 - Applications are private by default.
 - Public ingress requires an existing TLS secret.
 - Workload pods disable ServiceAccount token automount, require non-root execution, drop all Linux capabilities, disallow privilege escalation, use RuntimeDefault seccomp and use a read-only root filesystem.
