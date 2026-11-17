@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1040" viewBox="0 0 1600 1040">
+<defs>
+ <linearGradient id="blue" x2="0" y2="1"><stop stop-color="#0875df"/><stop offset="1" stop-color="#0754b5"/></linearGradient>
+ <linearGradient id="pale" x2="0" y2="1"><stop stop-color="#f7fbff"/><stop offset="1" stop-color="#e7f1ff"/></linearGradient>
+ <linearGradient id="green" x2="0" y2="1"><stop stop-color="#e5fff2"/><stop offset="1" stop-color="#c8f5df"/></linearGradient>
+ <style>
+ .h{font:700 30px Arial,sans-serif;fill:#102d59}.sub{font:18px Arial,sans-serif;fill:#17345f}
+ .layer{font:700 25px Arial,sans-serif;fill:#102d59}.item{font:700 18px Arial,sans-serif;fill:#102d59}.small{font:16px Arial,sans-serif;fill:#17345f}
+ .panel{fill:url(#pale);stroke:#9dc4ff;stroke-width:2}.tile{fill:#fff;stroke:#c2d8fb;stroke-width:1.5}
+ .side{fill:#f6faff;stroke:#a9c9fa;stroke-width:2}.arrow{stroke:#1265cf;stroke-width:4;fill:none;marker-end:url(#arr)}
+ </style>
+ <marker id="arr" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0 0 L0 6 L8 3z" fill="#1265cf"/></marker>
+</defs>
+<rect width="1600" height="1040" fill="#fff"/>
+<text x="65" y="68" font-family="Arial" font-size="48" font-weight="700" fill="#16345f">GAMGEE</text>
+<text x="68" y="105" font-family="Arial" font-size="28" fill="#16345f">Cloud OS</text>
+<path d="M470 32v80" stroke="#1763c5" stroke-width="2"/>
+<text x="505" y="65" font-family="Arial" font-size="34" fill="#17345f">Describe. Build. Run.</text>
+<text x="505" y="100" class="sub">An AI-driven, Function-Centric, One-Click Cloud</text>
+<rect x="25" y="135" width="1550" height="112" rx="20" class="panel"/>
+<text x="52" y="180" class="item">USER EXPERIENCE</text><text x="52" y="210" class="small">Simple. Visual. Human.</text>
+<rect x="270" y="155" width="235" height="72" rx="14" class="tile"/><text x="387" y="184" text-anchor="middle" class="item">GAMGEE UI</text><text x="387" y="207" text-anchor="middle" class="small">(White Theme)</text><rect x="525" y="155" width="235" height="72" rx="14" class="tile"/><text x="642" y="184" text-anchor="middle" class="item">Natural Language</text><text x="642" y="207" text-anchor="middle" class="small">(AI Assistant)</text><rect x="780" y="155" width="235" height="72" rx="14" class="tile"/><text x="897" y="184" text-anchor="middle" class="item">Launch Apps</text><text x="897" y="207" text-anchor="middle" class="small">/ Functions</text><rect x="1035" y="155" width="235" height="72" rx="14" class="tile"/><text x="1152" y="184" text-anchor="middle" class="item">View Topology</text><text x="1152" y="207" text-anchor="middle" class="small">& Monitor</text><rect x="1290" y="155" width="235" height="72" rx="14" class="tile"/><text x="1407" y="184" text-anchor="middle" class="item">Manage & Govern</text><text x="1407" y="207" text-anchor="middle" class="small"></text>
+<rect x="285" y="280" width="970" height="170" rx="22" fill="url(#blue)" stroke="#0754b5" stroke-width="2"/>
+<text x="770" y="320" text-anchor="middle" font-family="Arial" font-size="32" font-weight="700" fill="#fff">GAMGEE Control Tower</text>
+<text x="770" y="350" text-anchor="middle" font-family="Arial" font-size="20" fill="#fff">Orchestrate · Automate · Govern</text>
+<rect x="305" y="370" width="175" height="62" rx="14" fill="#f4f7ff" stroke="#cbdafa"/><text x="392" y="407" text-anchor="middle" class="item">Resource Engine</text><text x="392" y="419" text-anchor="middle" class="small"></text><rect x="492" y="370" width="175" height="62" rx="14" fill="#f4f7ff" stroke="#cbdafa"/><text x="579" y="394" text-anchor="middle" class="item">AI Agent</text><text x="579" y="419" text-anchor="middle" class="small">(Planning)</text><rect x="679" y="370" width="175" height="62" rx="14" fill="#f4f7ff" stroke="#cbdafa"/><text x="766" y="394" text-anchor="middle" class="item">Security</text><text x="766" y="419" text-anchor="middle" class="small">(Policy)</text><rect x="866" y="370" width="175" height="62" rx="14" fill="#f4f7ff" stroke="#cbdafa"/><text x="953" y="394" text-anchor="middle" class="item">Observability</text><text x="953" y="419" text-anchor="middle" class="small">(Monitoring)</text><rect x="1053" y="370" width="175" height="62" rx="14" fill="#f4f7ff" stroke="#cbdafa"/><text x="1140" y="394" text-anchor="middle" class="item">FinOps</text><text x="1140" y="419" text-anchor="middle" class="small">(Intelligence)</text>
+<rect x="285" y="485" width="970" height="145" rx="20" fill="#eee8ff" stroke="#a58aff" stroke-width="2"/>
+<text x="770" y="518" text-anchor="middle" class="layer">GAMGEE Resource Engine</text>
+<text x="770" y="542" text-anchor="middle" class="small">Desired State · Reconciliation · Lifecycle Management</text>
+<rect x="310" y="560" width="205" height="52" rx="13" fill="#dceeff" stroke="#77b5f4"/><text x="412" y="592" text-anchor="middle" class="item">Resource API</text><rect x="550" y="560" width="205" height="52" rx="13" fill="#eee6ff" stroke="#aa8be8"/><text x="652" y="592" text-anchor="middle" class="item">Resource Store</text><rect x="790" y="560" width="205" height="52" rx="13" fill="#dcf9e9" stroke="#7bd2a3"/><text x="892" y="592" text-anchor="middle" class="item">Reconciler</text><rect x="1030" y="560" width="205" height="52" rx="13" fill="#fff0d9" stroke="#efbd64"/><text x="1132" y="592" text-anchor="middle" class="item">Drivers</text>
+<rect x="75" y="665" width="1250" height="155" rx="20" fill="url(#green)" stroke="#8ce0ba" stroke-width="2"/>
+<text x="700" y="700" text-anchor="middle" class="layer">GAMGEE Runtime Layer</text>
+<rect x="95" y="720" width="185" height="78" rx="14" fill="#f5fffa" stroke="#9de4c3"/><text x="187" y="750" text-anchor="middle" class="item">Applications</text><text x="187" y="775" text-anchor="middle" class="small">Docker / Helm / Native</text><rect x="297" y="720" width="185" height="78" rx="14" fill="#f5fffa" stroke="#9de4c3"/><text x="389" y="750" text-anchor="middle" class="item">Functions</text><text x="389" y="775" text-anchor="middle" class="small">WASM / SpinKube</text><rect x="499" y="720" width="185" height="78" rx="14" fill="#f5fffa" stroke="#9de4c3"/><text x="591" y="750" text-anchor="middle" class="item">Virtual Machines</text><text x="591" y="775" text-anchor="middle" class="small">Incus / KVM</text><rect x="701" y="720" width="185" height="78" rx="14" fill="#f5fffa" stroke="#9de4c3"/><text x="793" y="750" text-anchor="middle" class="item">Services</text><text x="793" y="775" text-anchor="middle" class="small">Stacks / Charts</text><rect x="903" y="720" width="185" height="78" rx="14" fill="#f5fffa" stroke="#9de4c3"/><text x="995" y="750" text-anchor="middle" class="item">AI Services</text><text x="995" y="775" text-anchor="middle" class="small">LLM / RAG / Agents</text><rect x="1105" y="720" width="185" height="78" rx="14" fill="#f5fffa" stroke="#9de4c3"/><text x="1197" y="750" text-anchor="middle" class="item">Data & Storage</text><text x="1197" y="775" text-anchor="middle" class="small">Volumes / DB</text>
+<rect x="25" y="855" width="1550" height="115" rx="18" class="panel"/>
+<text x="60" y="895" class="item">INFRASTRUCTURE</text><text x="60" y="925" class="small">Any scale · 1 to 1000+ nodes</text>
+<path d="M310 875v75M820 875v75M1270 875v75" stroke="#8bb4ef" stroke-width="2"/>
+<text x="555" y="900" text-anchor="middle" class="item">Single Node · Your VM</text><text x="555" y="930" text-anchor="middle" class="small">Start small</text>
+<text x="1045" y="900" text-anchor="middle" class="item">Multi-Node · Scale Out</text><text x="1045" y="930" text-anchor="middle" class="small">Add compute capacity</text>
+<text x="1420" y="900" text-anchor="middle" class="item">Hybrid Cloud</text><text x="1420" y="930" text-anchor="middle" class="small">Extend anywhere</text>
+<rect x="25" y="280" width="220" height="350" rx="18" class="side"/>
+<text x="50" y="320" class="item">INSTALLATION</text><text x="50" y="346" class="item">PROFILES</text>
+<text x="52" y="390" class="small">✓  Core Cloud</text><text x="52" y="422" class="small">✓  Function Cloud</text><text x="52" y="454" class="small">✓  Private IaaS</text><text x="52" y="486" class="small">✓  AI Enterprise</text><text x="52" y="518" class="small">✓  Enterprise Security</text><text x="52" y="550" class="small">✓  Observability</text><text x="52" y="582" class="small">✓  Hybrid Cloud</text>
+<rect x="1310" y="280" width="265" height="350" rx="18" class="side"/>
+<text x="1340" y="320" class="item">ECOSYSTEM</text><text x="1340" y="346" class="item">INTEGRATION</text>
+<text x="1340" y="390" class="small">•  AWS / Azure / GCP</text><text x="1340" y="428" class="small">•  Docker & OCI</text><text x="1340" y="466" class="small">•  Kubernetes</text><text x="1340" y="504" class="small">•  OpenStack</text><text x="1340" y="542" class="small">•  MCP / Modern API</text><text x="1340" y="580" class="small">•  Other Clouds</text>
+<rect x="1310" y="665" width="265" height="305" rx="18" fill="#f0fae9" stroke="#a8db86" stroke-width="2"/>
+<text x="1340" y="705" class="item">ENTERPRISE</text><text x="1340" y="731" class="item">CAPABILITIES</text>
+<text x="1340" y="775" class="small">✓  Strong Security</text><text x="1340" y="802" class="small">✓  Multi-Tenant</text><text x="1340" y="829" class="small">✓  Federated Observability</text><text x="1340" y="856" class="small">✓  Backup & Recovery</text><text x="1340" y="883" class="small">✓  High Availability</text><text x="1340" y="910" class="small">✓  FinOps Intelligence</text><text x="1340" y="937" class="small">✓  AI-Driven Ops</text>
+<path d="M770 247v29M770 450v33M770 630v34M700 820v34" class="arrow"/>
+<text x="800" y="1010" text-anchor="middle" font-family="Arial" font-size="19" font-weight="700" fill="#16345f">Minimalist · Robust & Secure · High Performance · Open Source · Built for Everyone</text>
+</svg>
