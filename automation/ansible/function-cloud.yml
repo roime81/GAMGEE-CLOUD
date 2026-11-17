@@ -68,7 +68,7 @@
           - --filename
           - "https://github.com/cert-manager/cert-manager/releases/download/{{ cert_manager_version }}/cert-manager.yaml"
       register: cert_manager_apply
-      changed_when: "'created' in cert_manager_apply.stdout or 'configured' in cert_manager_apply.stdout
+      changed_when: "'created' in cert_manager_apply.stdout or 'configured' in cert_manager_apply.stdout"
 
     - name: Wait for cert-manager admission webhook
       ansible.builtin.command:
@@ -110,7 +110,7 @@
           - --filename
           - "https://github.com/spinframework/containerd-shim-spin/releases/download/{{ spin_shim_version }}/runtime-class-manager-shim-v1alpha1-{{ spin_shim_version }}.yaml"
       register: spin_shim_apply
-      changed_when: "'created' in spin_shim_apply.stdout or 'configured' in spin_shim_apply.stdout
+      changed_when: "'created' in spin_shim_apply.stdout or 'configured' in spin_shim_apply.stdout"
 
     - name: Mark current compute nodes as WASM-capable for Runtime Class Manager
       ansible.builtin.command:
@@ -126,7 +126,7 @@
           - --filename
           - "https://github.com/spinframework/spin-operator/releases/download/{{ spin_operator_version }}/spin-operator.crds.yaml"
       register: spin_crds_apply
-      changed_when: "'created' in spin_crds_apply.stdout or 'configured' in spin_crds_apply.stdout
+      changed_when: "'created' in spin_crds_apply.stdout or 'configured' in spin_crds_apply.stdout"
 
     - name: Install the SpinApp executor that uses the managed Wasm runtime class
       ansible.builtin.command:
@@ -136,7 +136,7 @@
           - --filename
           - "https://github.com/spinframework/spin-operator/releases/download/{{ spin_operator_version }}/spin-operator.shim-executor.yaml"
       register: spin_executor_apply
-      changed_when: "'created' in spin_executor_apply.stdout or 'configured' in spin_executor_apply.stdout
+      changed_when: "'created' in spin_executor_apply.stdout or 'configured' in spin_executor_apply.stdout"
 
     - name: Install or upgrade Spin Operator
       ansible.builtin.command:
