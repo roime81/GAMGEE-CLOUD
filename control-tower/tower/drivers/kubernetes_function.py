@@ -268,12 +268,21 @@ class KubernetesFunctionDriver:
 
         objects = build_function_objects(resource)
         key = function_resource_name(resource["workspace"], resource["name"], resource["id"])
+        # Preflight every object before applying anything. A conflict on a later
+        # object must not leave earlier GAMGEE objects partially created.
         for obj in objects:
             obj_namespace = obj["metadata"]["namespace"]
             resource_type = self._RESOURCE_TYPES[obj["kind"]]
-            self._existing(resource_type, key if obj["kind"] != "Service" else obj["metadata"]["name"], obj_namespace, resource)
-            # Apply the InterceptorRoute before its external-push ScaledObject. The
-            # HTTP scaler requires the route to exist before it can publish metrics.
+            self._existing(
+                resource_type,
+                obj["metadata"]["name"],
+                obj_namespace,
+                resource,
+            )
+
+        # Keep this order: KEDA's external-push scaler needs the InterceptorRoute
+        # to exist before it registers the ScaledObject.
+        for obj in objects:
             apply_object(obj)
 
         # Remove a former public route when the desired spec becomes private.
