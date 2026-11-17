@@ -21,7 +21,7 @@ export PATH="$ROOT/control-tower/.venv/bin:$PATH"
 export GAMGEE_TOWER_API_TOKEN
 GAMGEE_TOWER_API_TOKEN="$(cat "$TOKEN_FILE")"
 if [[ -z "$GAMGEE_TOWER_ALLOW_APPLY" ]]; then
-  export GAMGEE_TOWER_ALLOW_APPLY="true"
+  export GAMGEE_TOWER_ALLOW_APPLY="false"
 fi
 if [[ -z "$GAMGEE_TOWER_HOST" ]]; then
   export GAMGEE_TOWER_HOST="127.0.0.1"
