@@ -10,6 +10,7 @@ resources:
   minimum_ram_gib: 24
   minimum_disk_gib: 100
 required_tools: [ansible-playbook, docker]
+artifacts: [docker-compose.yml, docker-compose.ai-factory.yml]
 steps:
   - executor: ansible-playbook
     playbook: automation/ansible/ai-enterprise.yml
