@@ -48,7 +48,7 @@ class WorkloadRequest(BaseModel):
     name: str = Field(min_length=1, max_length=63)
     image: str = Field(min_length=3, max_length=255)
     port: int = Field(default=8080, ge=1024, le=65535)
-    replicas: int = Field(default=1, ge=1, le=20)
+    replicas: int = Field(default=1, ge=0, le=20)
     size: Literal["small", "standard", "large"] = "small"
     health_path: str = Field(default="/", min_length=1, max_length=128)
     hostname: str | None = Field(default=None, max_length=253)
@@ -143,7 +143,13 @@ def build_workspace_manifest(request: WorkspaceRequest) -> dict:
     }
 
 
-def build_workload_objects(workspace: str, request: WorkloadRequest) -> list[dict]:
+def build_workload_objects(
+    workspace: str,
+    request: WorkloadRequest,
+    *,
+    resource_id: str | None = None,
+    restart_token: str | None = None,
+) -> list[dict]:
     """Compile a small, safe app intent into fixed Kubernetes resources."""
     if not _DNS_LABEL.fullmatch(workspace):
         raise ValueError("Workspace must be a lowercase DNS label.")
@@ -156,6 +162,8 @@ def build_workload_objects(workspace: str, request: WorkloadRequest) -> list[dic
         "gamgee.cloud/tenant": workspace,
         "gamgee.cloud/app": request.name,
     }
+    if resource_id:
+        labels["gamgee.cloud/resource-id"] = resource_id
     resources = SIZE_RESOURCES[request.size]
 
     deployment = {
@@ -168,7 +176,10 @@ def build_workload_objects(workspace: str, request: WorkloadRequest) -> list[dic
             "strategy": {"type": "RollingUpdate", "rollingUpdate": {"maxSurge": 1, "maxUnavailable": 0}},
             "selector": {"matchLabels": {"app.kubernetes.io/name": request.name}},
             "template": {
-                "metadata": {"labels": labels},
+                "metadata": {
+                    "labels": labels,
+                    **({"annotations": {"gamgee.cloud/restart-token": restart_token}} if restart_token else {}),
+                },
                 "spec": {
                     "automountServiceAccountToken": False,
                     "securityContext": {"seccompProfile": {"type": "RuntimeDefault"}},
