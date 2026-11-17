@@ -563,7 +563,7 @@ Application resource example:
 
 The canonical API version is `gamgee.io/v1alpha1`. The current release registers only the `Application` kind. Function, Machine, Service, Workspace, Route and Secret are planned resource kinds, not falsely advertised as operational drivers.
 
-The local reconciler runs in the Control Tower process. SQLite is the current single-node state backend. The schema is designed to keep desired state, observed state, operations and events separate; multi-replica Control Tower deployment will require a shared transactional database and distributed worker coordination before enabling multiple reconcilers.
+The local reconciler runs in the Control Tower process. SQLite is the current single-node state backend. The reconciler is a single in-process worker; run one Uvicorn worker only while using the local SQLite state backend. The schema is designed to keep desired state, observed state, operations and events separate; multi-replica Control Tower deployment will require a shared transactional database and distributed worker coordination before enabling multiple reconcilers.
 
 ## 8. Security model and current security gaps
 
