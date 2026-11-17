@@ -260,7 +260,7 @@ The current starter uses K3s' default Flannel backend; UDP `8472` is therefore r
 
 #### C. AWS — Amazon EKS managed Kubernetes (planned integration)
 
-<Badge>Not available in the current release</Badge>
+**Status: planned integration — not available in the current release.**
 
 The current installer does not create an EKS cluster, configure AWS IAM, or attach the GAMGEE Resource Engine to an existing EKS cluster. The Hybrid Cloud provider is a scaffold. Do not treat the following as an executable EKS installation procedure.
 
@@ -285,7 +285,7 @@ Use the EKS cluster's actual API endpoint DNS name, VPC/subnet CIDRs, security-g
 
 #### D. Azure — Azure Kubernetes Service (AKS) managed Kubernetes (planned integration)
 
-<Badge>Not available in the current release</Badge>
+Not available in the current release
 
 The current installer does not create an AKS cluster, configure Microsoft Entra ID, or attach the GAMGEE Resource Engine to an existing AKS cluster. The Hybrid Cloud provider is a scaffold. The following is a target integration pattern, not a supported installation procedure today.
 
