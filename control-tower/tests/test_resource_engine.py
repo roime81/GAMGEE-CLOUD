@@ -29,6 +29,9 @@ class FakeDriver:
                 desired={"image": "nginx:1.28", "replicas": 2},
             )
         if resource["desired"].get("deleted"):
+            if getattr(self, "delete_pending_once", False):
+                self.delete_pending_once = False
+                return {"state": "deleting", "remaining_resources": ["deployment.apps/portal"]}
             return {"state": "deleted"}
         if self.calls[-1][0] == 1 and self.update_during_reconcile is False and getattr(self, "progress_once", False):
             self.progress_once = False
@@ -128,6 +131,37 @@ class ResourceEngineTests(unittest.TestCase):
         self.assertEqual(second["succeeded"], 1)
         self.assertEqual(self.store.get(resource["id"])["phase"], "ready")
         self.assertEqual(driver.calls[-1][0], "observe")
+
+    def test_delete_remains_pending_until_driver_confirms_absence(self):
+        driver = FakeDriver()
+        engine = ResourceEngine(self.store, [driver])
+        resource, _, _ = engine.submit(
+            kind="Application",
+            workspace="acme",
+            name="portal",
+            desired={"image": "nginx:1.27", "replicas": 1},
+        )
+        engine.reconcile_due()
+        driver.delete_pending_once = True
+        deleted, operation_id, _ = engine.delete(resource["id"], workspace="acme")
+        self.assertEqual(deleted["phase"], "deleting")
+
+        first = engine.reconcile_due()
+        self.assertEqual(first["succeeded"], 1)
+        pending = self.store.get(resource["id"])
+        self.assertEqual(pending["phase"], "deleting")
+        self.assertEqual(self.store.get_operation(operation_id)["status"], "waiting")
+
+        with self.store._connection() as connection:
+            connection.execute(
+                "UPDATE resources SET next_attempt_at=? WHERE id=?",
+                ("2000-01-01T00:00:00+00:00", resource["id"]),
+            )
+        second = engine.reconcile_due()
+        self.assertEqual(second["succeeded"], 1)
+        final = self.store.get(resource["id"])
+        self.assertEqual(final["phase"], "deleted")
+        self.assertEqual(self.store.get_operation(operation_id)["status"], "succeeded")
 
     def test_unregistered_resource_kind_is_rejected(self):
         engine = ResourceEngine(self.store, [FakeDriver()])

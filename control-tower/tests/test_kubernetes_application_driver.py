@@ -83,6 +83,50 @@ class KubernetesApplicationDriverTests(unittest.TestCase):
 
     @patch("tower.drivers.kubernetes_application.run_kubectl")
     @patch("tower.drivers.kubernetes_application.get_json")
+    def test_delete_reports_deleting_while_owned_objects_still_exist(self, get_json, run_kubectl):
+        resource = dict(self.resource)
+        resource["desired"] = {"deleted": True}
+        owned = {
+            "metadata": {"labels": {
+                "gamgee.cloud/managed-by": "gamgee",
+                "gamgee.cloud/tenant": "acme",
+                "gamgee.cloud/resource-id": resource["id"],
+            }}
+        }
+
+        def fake_get(kind, name=None, namespace=None, label_selector=None):
+            if kind == "namespace":
+                return {"metadata": {"labels": {"gamgee.cloud/tenant": "acme"}}}
+            return owned
+
+        get_json.side_effect = fake_get
+        observed = self.driver.reconcile(resource)
+        self.assertEqual(observed["state"], "deleting")
+        self.assertEqual(
+            observed["remaining_resources"],
+            ["deployment.apps", "service", "ingress"],
+        )
+        run_kubectl.assert_called_once()
+
+    @patch("tower.drivers.kubernetes_application.run_kubectl")
+    @patch("tower.drivers.kubernetes_application.get_json")
+    def test_delete_reports_deleted_when_all_owned_objects_are_absent(self, get_json, run_kubectl):
+        resource = dict(self.resource)
+        resource["desired"] = {"deleted": True}
+
+        def fake_get(kind, name=None, namespace=None, label_selector=None):
+            if kind == "namespace":
+                return {"metadata": {"labels": {"gamgee.cloud/tenant": "acme"}}}
+            raise ClusterNotFound("not found")
+
+        get_json.side_effect = fake_get
+        observed = self.driver.reconcile(resource)
+        self.assertEqual(observed["state"], "deleted")
+        self.assertEqual(observed["remaining_resources"], [])
+        run_kubectl.assert_called_once()
+
+    @patch("tower.drivers.kubernetes_application.run_kubectl")
+    @patch("tower.drivers.kubernetes_application.get_json")
     def test_delete_workspace_missing_is_idempotently_complete(self, get_json, run_kubectl):
         resource = dict(self.resource)
         resource["desired"] = {"deleted": True}
