@@ -4,6 +4,8 @@
   connection: local
   become: true
   gather_facts: true
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   vars:
     gamgee_repo_root: "{{ playbook_dir }}/../.."
   tasks:
