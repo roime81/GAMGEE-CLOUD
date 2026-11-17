@@ -8,7 +8,8 @@ This guide describes the current engineering preview. The Control Tower now incl
 - a white guided UI with a Core Cloud first-run path
 - Capsule workspace creation
 - deterministic stateless application compilation into Deployment, Service and optional TLS-backed Ingress
-- application list, scale/stop, restart and delete operations
+- native Function API and UI backed by SpinKube WebAssembly execution and KEDA HTTP scale-to-zero
+- application list, scale/stop, restart and delete operations; Function list and delete operations
 - cluster node status
 - capacity-aware local bundle recommendation (Core is the minimum; other local foundations are added when the host has headroom)
 - a K3s worker join script
@@ -60,16 +61,19 @@ There is one installation-level administrator token. There is no per-user OIDC, 
 
 ## Resource Engine
 
-The Resource Engine persists Application desired state in the same SQLite database as the Control Tower job ledger, but in separate tables. Each resource has a stable UUID, workspace/kind/name identity, desired spec, observed state, generation, observed generation, phase, retry count and last error. Each generation has one operation record. An optional `Idempotency-Key` is scoped to the workspace and bound to a canonical request hash; reusing the same key with a different payload returns HTTP 409. Resource events are appended for desired-state and reconciliation transitions. Operation attempts include reconciliation/observation passes; transient errors are represented by the resource `error` phase and a retry schedule.
+The Resource Engine persists Application and Function desired state in the same SQLite database as the Control Tower job ledger, but in separate tables. Each resource has a stable UUID, workspace/kind/name identity, desired spec, observed state, generation, observed generation, phase, retry count and last error. Each generation has one operation record. An optional `Idempotency-Key` is scoped to the workspace and bound to a canonical request hash; reusing the same key with a different payload returns HTTP 409. Resource events are appended for desired-state and reconciliation transitions. Operation attempts include reconciliation/observation passes; transient errors are represented by the resource `error` phase and a retry schedule.
 
-`ResourceEngine` uses a narrow driver registry. The initial driver is `KubernetesApplicationDriver`, which validates the workspace namespace, verifies that all same-named objects carry the GAMGEE manager/tenant/resource-id labels, validates TLS Secret type and compiles only the known Application schema. The driver applies declarative Deployment/Service/Ingress resources or deletes only owned objects. It never accepts caller-supplied Kubernetes YAML or shell commands.
+`ResourceEngine` uses a narrow driver registry. The `KubernetesApplicationDriver` validates the workspace namespace, verifies that same-named Deployment/Service/Ingress objects carry GAMGEE manager/tenant/resource-id labels, validates TLS Secret type and compiles only the known Application schema. The `KubernetesFunctionDriver` compiles the typed Function schema into SpinKube and KEDA HTTP resources, including a per-function ServiceAccount with automatic token mounting disabled. It verifies ownership before changing or deleting its GAMGEE-managed SpinApp, InterceptorRoute, ScaledObject, proxy Service, ServiceAccount and optional public Ingress. Neither driver accepts caller-supplied Kubernetes YAML or shell commands.
 
 The background worker claims due resources atomically with SQLite `BEGIN IMMEDIATE`, executes one generation, stores observed state and operation outcome, and schedules transient failures with bounded exponential backoff. Workloads that have been applied but are not yet ready enter a `progressing` phase and are observed again every few seconds without re-applying the manifest. Deletions remain in a `deleting` phase until the driver verifies that the GAMGEE-owned Deployment, Service and Ingress are absent. Ready resources are periodically reconciled to correct drift. A resource update that races an in-flight reconcile supersedes the old generation; the newer desired generation remains pending. Stale reconciling leases are recovered after three minutes. The initial worker is a single-process loop; SQLite is not a multi-host shared state backend and this release does not claim horizontally scaled reconciler HA. Run one Uvicorn worker only until a shared transactional database and distributed worker-coordination mechanism are delivered.
 
 ### Resource API
 
 - `POST /v1/resources/applications`
-- `GET /v1/resources`
+- `POST /v1/resources/functions`
+- `GET /v1/resources` (filter with `?kind=Function` for Functions)
+- `GET /v1/tower/workspaces/{workspace}/functions`
+- `DELETE /v1/tower/workspaces/{workspace}/functions/{function_name}`
 - `GET /v1/resources/{resource_id}?workspace=<workspace>`
 - `GET /v1/resources/{resource_id}/operations?workspace=<workspace>`
 - `GET /v1/resources/{resource_id}/events?workspace=<workspace>`
@@ -77,7 +81,7 @@ The background worker claims due resources atomically with SQLite `BEGIN IMMEDIA
 
 The existing workspace-scoped `/v1/tower/workspaces/{workspace}/apps` endpoints are compatibility routes over the same Resource Engine. Stop, resume, restart and delete now change desired state and generate operations rather than directly issuing imperative Kubernetes mutations from request handlers.
 
-All Application mutations accept an optional `Idempotency-Key` header. The key is scoped to the workspace and bound to the canonical request hash. Retries with the same key and same intent reuse the original operation. A different request body with the same key returns HTTP 409. The supported lifecycle includes create/update, scale/stop, resume, restart and delete.
+All Application mutations and Function create/update/delete requests accept an optional `Idempotency-Key` header. The key is scoped to the workspace and bound to the canonical request hash. Retries with the same key and same intent reuse the original operation. A different request body with the same key returns HTTP 409.
 
 ## API inventory
 
@@ -154,6 +158,53 @@ Size tiers:
 
 The request model rejects :latest, untagged image names, arbitrary extra fields and ports below 1024. Workspace/app names are DNS labels. Public hostname and TLS secret must be supplied together.
 
+## Native Function resource
+
+The canonical endpoint is `POST /v1/resources/functions`; it accepts a body with `workspace` and a typed `spec`. The workspace-scoped UI and list route are backed by the same Resource Engine. A Function spec includes:
+
+- `name`: DNS label
+- `image`: registry-qualified Spin/WASM OCI artifact with explicit version tag or SHA-256 digest; mutable `:latest` is rejected
+- `path`: absolute HTTP path prefix
+- `min_replicas` / `max_replicas`: bounded 0–20 scaling range
+- `concurrency`: target in-flight HTTP requests per replica
+- `cooldown_seconds`: bounded scale-down delay
+- optional `hostname` and `tls_secret`, which must be provided together
+
+Example:
+
+    {
+      "workspace": "acme",
+      "spec": {
+        "name": "thumbnail",
+        "image": "ghcr.io/example/thumbnail:v1.0.0",
+        "path": "/resize",
+        "min_replicas": 0,
+        "max_replicas": 8,
+        "concurrency": 40,
+        "cooldown_seconds": 120
+      }
+    }
+
+The user must publish a Spin-compatible WebAssembly artifact before creating the resource. This is not a general container image API, source builder or arbitrary WASI runtime endpoint.
+
+### Function Cloud installation
+
+The `function-cloud` profile installs KEDA core, cert-manager, Runtime Class Manager, the Spin shim, Spin Operator CRDs/executor/Helm chart and the KEDA HTTP Add-on. The current pinned versions are declared in `automation/ansible/function-cloud.yml`. The installer labels all current nodes `spin=true`; a newly joined worker may require that label before it can host Spin workloads.
+
+The driver compiles:
+- a SpinApp with external autoscaling enabled and a fixed resource request/limit;
+- a per-function ServiceAccount with `automountServiceAccountToken: false`;
+- an InterceptorRoute targeting the Spin Operator-generated Service and matching internal proxy hostnames plus the optional public hostname;
+- a Workspace ExternalName Service pointing at `keda-add-ons-http-interceptor-proxy.keda.svc.cluster.local:8080`;
+- a KEDA ScaledObject using `external-push` against `keda-add-ons-http-external-scaler.keda:9090`;
+- an optional Traefik Ingress in namespace `keda`.
+
+The driver applies the InterceptorRoute before the ScaledObject. The Function public TLS Secret must already exist in namespace `keda`, because the Ingress is created in the same namespace as the shared HTTP interceptor. For private Functions, callers inside the cluster must use the returned proxy URL so requests flow through the interceptor and are counted for autoscaling.
+
+A minimum replica count of zero enables scale-to-zero. The InterceptorRoute includes a 100-request cold-start pending limit per interceptor replica. The add-on still needs real-cluster load, cold-start and overload acceptance tests.
+
+Not in this slice: source build/publish pipelines, HTTP-to-queue/event bridges, cron/schedule triggers, NATS/Kafka subscriptions, secret/environment/volume bindings, private registry credential management, invocation-level telemetry and cost attribution. The UI supports launch/list/delete, but not arbitrary function runtime configuration.
+
 ## Application compiler and security profile
 
 The compiler creates:
@@ -224,9 +275,9 @@ This creates a K3s agent node only. It does not create an HA control plane, an I
 
     PYTHONPATH=control-tower python -m unittest discover -s control-tower/tests -v
 
-Tests cover profile loading/dependency resolution, planning, job/resource persistence, idempotency, generations, operation claiming, retry/backoff, reconciliation and driver safety, playbook path safety, workload schema/compiler and Kubernetes adapter argv behavior.
+Tests cover profile loading/dependency resolution, planning, job/resource persistence, idempotency, generations, operation claiming, retry/backoff, Application and Function schema validation, Spin/KEDA manifest compilation, Function ownership protection and deletion behavior, playbook path safety, workload compilation and Kubernetes adapter argv behavior.
 
-CI also runs AI service unit tests, shell syntax checks and Ansible syntax checks. CI does not provision a real K3s cluster. A disposable-VM acceptance test is required before a production rollout.
+CI also runs AI service unit tests, shell syntax checks and Ansible syntax checks. CI does not provision a real K3s cluster. Function CRD interoperability, Spin shim scheduling, actual KEDA scale-to-zero, ingress/TLS and cold-start behavior still require a disposable-cluster acceptance test before production use.
 
 ## Recovery and data handling
 
@@ -247,5 +298,6 @@ CI also runs AI service unit tests, shell syntax checks and Ansible syntax check
 5. Registry signature verification and workload admission policy.
 6. Automated backups and tested restore.
 7. Three-server HA control plane and API failover.
-8. End-to-end tests for real Capsule, K3s, app scheduling, ingress, TLS and node join.
-9. Immutable, identity-attributed audit trail.
+8. End-to-end tests for real Capsule, K3s, app scheduling, Function WASM execution, KEDA scale-to-zero, ingress/TLS and node join.
+9. Function source build/publish, secure secret binding and invocation telemetry.
+10. Immutable, identity-attributed audit trail.
