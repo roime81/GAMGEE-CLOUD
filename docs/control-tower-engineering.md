@@ -17,7 +17,7 @@ This is a meaningful vertical slice, not a claim of a complete cloud operating s
 
 ## Process and trust boundary
 
-The guided installer registers gamgee-control-tower.service as a root service. It:
+The guided installer registers gamgee-control-tower.service as a root service. The generated unit explicitly prepends the GAMGEE virtual environment's bin directory to PATH, and the planner/runner also resolve ansible-playbook from that venv as a fallback. It:
 - binds to 127.0.0.1:8091
 - reads a generated bearer token from a root-only environment file
 - records installation jobs in SQLite

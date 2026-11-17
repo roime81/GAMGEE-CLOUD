@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import threading
 from pathlib import Path
@@ -10,6 +9,7 @@ from typing import Any
 from tower.catalog import load_catalog
 from tower.config import ROOT, settings
 from tower.store import JobStore
+from tower.host_tools import resolve_tool
 
 
 def _run_playbook(playbook: str, timeout: int) -> tuple[int, str]:
@@ -18,7 +18,7 @@ def _run_playbook(playbook: str, timeout: int) -> tuple[int, str]:
     if allowed_root not in candidate.parents or not candidate.is_file():
         raise ValueError(f"Playbook is not an approved repository file: {playbook}")
 
-    executable = shutil.which("ansible-playbook")
+    executable = resolve_tool("ansible-playbook")
     if not executable:
         raise RuntimeError("ansible-playbook was not found. Install Control Tower requirements first.")
 

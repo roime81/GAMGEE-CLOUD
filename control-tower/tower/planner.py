@@ -9,6 +9,7 @@ from typing import Any
 
 from tower.catalog import load_catalog, resolve_profiles
 from tower.config import ROOT
+from tower.host_tools import resolve_tool
 
 
 def _available_memory_gib() -> float | None:
@@ -31,7 +32,7 @@ def build_plan(selected: list[str]) -> dict[str, Any]:
         "disk_gib": sum(item["resources"]["minimum_disk_gib"] for item in items),
     }
     tools = sorted({tool for item in items for tool in item["required_tools"]})
-    missing_tools = [tool for tool in tools if shutil.which(tool) is None]
+    missing_tools = [tool for tool in tools if resolve_tool(tool) is None]
     warnings: list[str] = []
     blockers: list[str] = []
 

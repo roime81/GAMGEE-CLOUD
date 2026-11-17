@@ -58,6 +58,7 @@ User=root
 Group=root
 WorkingDirectory=$ROOT
 EnvironmentFile=/etc/gamgee/control-tower.env
+Environment="PATH=$ROOT/control-tower/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ExecStart=$ROOT/control-tower/.venv/bin/uvicorn tower.main:app --app-dir $ROOT/control-tower --host 127.0.0.1 --port 8091
 Restart=on-failure
 RestartSec=5
