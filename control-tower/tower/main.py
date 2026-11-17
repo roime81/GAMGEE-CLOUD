@@ -298,7 +298,11 @@ def list_apps(workspace: str):
                 "desired_replicas": spec.get("replicas", 1),
                 "ready_replicas": status.get("readyReplicas", 0),
                 "available_replicas": status.get("availableReplicas", 0),
-                "status": "ready" if status.get("readyReplicas", 0) >= spec.get("replicas", 1) else "progressing",
+                "status": (
+                    "stopped" if spec.get("replicas", 1) == 0
+                    else "ready" if status.get("readyReplicas", 0) >= spec.get("replicas", 1)
+                    else "progressing"
+                ),
             }
         )
     return {"workspace": workspace, "namespace": namespace, "apps": apps}
@@ -324,12 +328,43 @@ def deploy_app(workspace: str, request: WorkloadRequest):
 
 @app.post("/v1/tower/workspaces/{workspace}/apps/{app_name}/scale", dependencies=[Depends(require_token)])
 def scale_app(workspace: str, app_name: str, request: ScaleRequest):
-    namespace, _ = _managed_deployment(workspace, app_name)
+    namespace, deployment = _managed_deployment(workspace, app_name)
     try:
+        if request.replicas == 0:
+            previous = int(deployment.get("spec", {}).get("replicas", 1))
+            if previous > 0:
+                run_kubectl([
+                    "annotate", f"deployment/{app_name}",
+                    f"gamgee.cloud/previous-replicas={previous}",
+                    "--overwrite", "--namespace", namespace,
+                ])
         run_kubectl(["scale", f"deployment/{app_name}", f"--replicas={request.replicas}", "--namespace", namespace])
+        if request.replicas > 0:
+            run_kubectl([
+                "annotate", f"deployment/{app_name}",
+                f"gamgee.cloud/previous-replicas={request.replicas}",
+                "--overwrite", "--namespace", namespace,
+            ])
     except ClusterError as exc:
         raise _cluster_failure(exc) from exc
-    return {"workspace": workspace, "app": app_name, "replicas": request.replicas, "status": "scaling"}
+    status = "stopped" if request.replicas == 0 else "scaling"
+    return {"workspace": workspace, "app": app_name, "replicas": request.replicas, "status": status}
+
+
+@app.post("/v1/tower/workspaces/{workspace}/apps/{app_name}/resume", dependencies=[Depends(require_token)])
+def resume_app(workspace: str, app_name: str):
+    namespace, deployment = _managed_deployment(workspace, app_name)
+    annotations = deployment.get("metadata", {}).get("annotations", {})
+    try:
+        target = int(annotations.get("gamgee.cloud/previous-replicas", "1"))
+    except (TypeError, ValueError):
+        target = 1
+    target = min(20, max(1, target))
+    try:
+        run_kubectl(["scale", f"deployment/{app_name}", f"--replicas={target}", "--namespace", namespace])
+    except ClusterError as exc:
+        raise _cluster_failure(exc) from exc
+    return {"workspace": workspace, "app": app_name, "replicas": target, "status": "resuming"}
 
 
 @app.post("/v1/tower/workspaces/{workspace}/apps/{app_name}/restart", dependencies=[Depends(require_token)])
