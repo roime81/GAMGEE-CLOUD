@@ -15,6 +15,10 @@ The underlying platform uses open-source infrastructure, but GAMGEE owns the use
 
 > **Release status: early engineering preview.** The repository contains a working installation Control Tower, workspace and stateless application APIs, a first native WebAssembly HTTP Function resource using SpinKube and KEDA, a K3s worker join path, an existing AI Factory and optional infrastructure profiles. This is not yet a production-ready or highly available cloud, a complete multi-trigger FaaS platform, a full VM cloud, or a certified security product. The capability matrix below is explicit about what works and what remains planned.
 
+## Documentation
+
+The expanded [GAMGEE Technical Handbook](docs/README.md) covers the product introduction, architecture, technology stack, installation, compute and scaling, AI Factory, API integrations, MCP, security and operations.
+
 ## Contents
 
 - [1. Product philosophy](#1-product-philosophy)
