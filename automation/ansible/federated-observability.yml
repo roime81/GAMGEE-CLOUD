@@ -4,6 +4,8 @@
   connection: local
   become: true
   gather_facts: false
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   vars:
     victoria_metrics_chart_version: "0.98.1"
   tasks:
