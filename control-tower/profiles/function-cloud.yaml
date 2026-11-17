@@ -1,14 +1,14 @@
 schema_version: 1
 id: function-cloud
 name: Function Cloud
-description: Event-driven function scaling foundation using KEDA. GAMGEE Function API and WASM runtime are separate application components.
+description: Native WebAssembly function execution with SpinKube and HTTP request-aware scale-to-zero using KEDA.
 implementation: executable-foundation
 depends_on: [core-cloud]
-components: [keda, function-runtime-integration-point]
+components: [spin-wasm-runtime, spin-operator, keda-http-autoscaler]
 resources:
-  minimum_vcpu: 2
-  minimum_ram_gib: 3
-  minimum_disk_gib: 15
+  minimum_vcpu: 4
+  minimum_ram_gib: 5
+  minimum_disk_gib: 20
 required_tools: [ansible-playbook]
 steps:
   - executor: ansible-playbook
