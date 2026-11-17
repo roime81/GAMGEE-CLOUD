@@ -10,7 +10,7 @@ This guide describes the current engineering preview. The Control Tower now incl
 - deterministic stateless application compilation into Deployment, Service and optional TLS-backed Ingress
 - application list, scale/stop, restart and delete operations
 - cluster node status
-- host-aware local bundle recommendation (Core + Functions + Security + local Observability; KVM-backed IaaS and AI are added when ready)
+- host-aware local bundle recommendation (Core + Functions + Security + local Observability; the Incus/QEMU Private IaaS foundation and AI are added when ready)
 - a K3s worker join script
 
 This is a meaningful vertical slice, not a claim of a complete cloud operating system. Review the root README capability matrix and security limitations.

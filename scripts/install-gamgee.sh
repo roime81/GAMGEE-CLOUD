@@ -86,5 +86,5 @@ echo
 echo "Control Tower token (local root access only):"
 echo "  sudo cat $TOKEN_FILE"
 echo
-echo "Next: connect with the token and click 'Build my cloud' to install the host-compatible GAMGEE Local Cloud bundle. VM hosting is included when /dev/kvm is available; the private AI stack is included when Docker Compose and configured secrets are ready."
+echo "Next: connect with the token and click 'Build my cloud' to install the host-compatible GAMGEE Local Cloud bundle. The Private IaaS foundation is included when /dev/kvm is available; the private AI stack is included when Docker Compose and configured secrets are ready."
 echo "The API remains loopback-bound. Do not expose port 8091 directly to the Internet."

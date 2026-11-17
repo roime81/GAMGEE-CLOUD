@@ -88,11 +88,11 @@ def recommend_local_bundle(*, kvm_available: bool, ai_available: bool) -> dict:
     if kvm_available:
         profiles.append("private-iaas")
         included.append(
-            {"id": "private-iaas", "name": "Private VM hosting", "reason": "KVM is available; Incus/QEMU foundation will be installed."}
+            {"id": "private-iaas", "name": "Private IaaS foundation", "reason": "KVM is available; Incus/QEMU packages and host initialization will be installed. GAMGEE VM lifecycle APIs are a later milestone."}
         )
     else:
         skipped.append(
-            {"id": "private-iaas", "name": "Private VM hosting", "reason": "KVM was not detected. Enable nested/hardware virtualisation and expose /dev/kvm to include VM hosting."}
+            {"id": "private-iaas", "name": "Private IaaS foundation", "reason": "KVM was not detected. Enable nested/hardware virtualisation and expose /dev/kvm to install the Incus/QEMU foundation."}
         )
 
     if ai_available:

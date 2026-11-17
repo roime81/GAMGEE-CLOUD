@@ -171,7 +171,7 @@ Open this URL from a browser running on the VM:
 
 Paste the token and select **Connect**. Then choose **Build my cloud**. GAMGEE detects host capabilities and generates one dependency-ordered plan for the full local bundle. It checks resources and missing tools before asking you to approve installation.
 
-The local bundle installs the supported local profiles in dependency order. On a typical host without KVM or a pre-configured Docker AI stack, it installs K3s, Helm, Capsule, Traefik, OpenCost, KEDA, Kyverno and the local VictoriaMetrics/Grafana stack. With /dev/kvm it also installs the Incus/QEMU VM foundation. The Control Tower plan shows exact selected profiles, minimum resources and host preflight results before changes are made.
+The local bundle installs the supported local profiles in dependency order. On a typical host without KVM or a pre-configured Docker AI stack, it installs K3s, Helm, Capsule, Traefik, OpenCost, KEDA, Kyverno and the local VictoriaMetrics/Grafana stack. With /dev/kvm it also installs and initializes the Incus/QEMU Private IaaS foundation. The GAMGEE VM resource API and VM lifecycle management are not yet implemented. The Control Tower plan shows exact selected profiles, minimum resources and host preflight results before changes are made.
 
 ### Remote browser access
 
@@ -200,7 +200,7 @@ The manual launcher defaults to planning-only mode. To permit installation opera
 
 ### Step 1 — Create your cloud
 
-The **Build my cloud** action creates a host-aware **GAMGEE Local Cloud** plan. It automatically composes the Core Cloud, Function Cloud, Security foundation and local Observability profiles. It adds Private IaaS when /dev/kvm is available, and adds the AI Factory only when Docker Compose v2, a running Docker daemon and non-placeholder secrets in the repository .env file are present. Hybrid Cloud is deliberately excluded because the current provider adapter is only a scaffold.
+The **Build my cloud** action creates a host-aware **GAMGEE Local Cloud** plan. It automatically composes the Core Cloud, Function Cloud, Security foundation and local Observability profiles. It adds the Incus/QEMU Private IaaS foundation when /dev/kvm is available, and adds the AI Factory only when Docker Compose v2, a running Docker daemon and non-placeholder secrets in the repository .env file are present. Hybrid Cloud is deliberately excluded because the current provider adapter is only a scaffold.
 
 The advanced profile catalogue is not required for ordinary onboarding. GAMGEE displays what it included and what it skipped before the operator approves the plan.
 
