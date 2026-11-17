@@ -77,6 +77,8 @@ The background worker claims due resources atomically with SQLite `BEGIN IMMEDIA
 
 The existing workspace-scoped `/v1/tower/workspaces/{workspace}/apps` endpoints are compatibility routes over the same Resource Engine. Stop, resume, restart and delete now change desired state and generate operations rather than directly issuing imperative Kubernetes mutations from request handlers.
 
+All Application mutations accept an optional `Idempotency-Key` header. The key is scoped to the workspace and bound to the canonical request hash. Retries with the same key and same intent reuse the original operation. A different request body with the same key returns HTTP 409. The supported lifecycle includes create/update, scale/stop, resume, restart and delete.
+
 ## API inventory
 
 ### Health and cluster

@@ -563,6 +563,8 @@ Application resource example:
 
 The canonical API version is `gamgee.io/v1alpha1`. The current release registers only the `Application` kind. Function, Machine, Service, Workspace, Route and Secret are planned resource kinds, not falsely advertised as operational drivers.
 
+All Application mutations accept an optional `Idempotency-Key` header (create/update, scale/stop, resume, restart and delete). Keys are scoped to the workspace and limited to 128 characters. Repeating the same key and same intent returns the original resource/operation; reusing a key for a different intent returns HTTP 409. Restart keys are deterministically mapped to a restart token so a retried restart request does not create another rollout.
+
 The local reconciler runs in the Control Tower process. SQLite is the current single-node state backend. The reconciler is a single in-process worker; run one Uvicorn worker only while using the local SQLite state backend. The schema is designed to keep desired state, observed state, operations and events separate; multi-replica Control Tower deployment will require a shared transactional database and distributed worker coordination before enabling multiple reconcilers.
 
 ## 8. Security model and current security gaps
