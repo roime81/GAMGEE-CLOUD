@@ -269,3 +269,51 @@ bash scripts/teardown.sh --yes   # non-interactive
 ```
 
 This uninstalls K3s and **deletes every workload and volume in the cluster** on this host. To remove the Compose stacks and their data, run `make factory-down` and `docker compose down -v`.
+
+
+## GAMGEE Control Tower
+
+GAMGEE now includes an initial **Control Tower** foundation for dependency-aware installation planning and approved profile execution.
+
+The Control Tower provides a white-theme operator workspace, authenticated FastAPI endpoints, a declarative seven-profile catalogue, host preflight checks, SHA-256 plan fingerprints, persistent SQLite job history and an Ansible playbook runner restricted to repository-owned playbooks.
+
+### Installation profiles
+
+| Profile | Initial executable scope |
+| --- | --- |
+| Core Cloud | Existing K3s, Capsule, Traefik and OpenCost bootstrap |
+| Function Cloud | KEDA event-driven autoscaling foundation |
+| Private IaaS | Incus and QEMU/KVM host foundation |
+| AI Enterprise | Existing Docker Compose AI Factory stack |
+| Enterprise Security | Kyverno admission-policy engine |
+| Federated Observability | VictoriaMetrics Kubernetes stack and Grafana |
+| Hybrid Cloud | OpenTofu workspace validation and integration scaffold |
+
+Some enterprise features remain staged integrations. In particular, the native GAMGEE Function API/WASM controller, full OpenBao lifecycle, end-to-end remote telemetry federation, and cloud-specific OpenTofu resource modules are not yet implemented by this initial Control Tower slice.
+
+### Install and run the Control Tower
+
+On a supported Ubuntu/Debian host with Python 3, OpenSSL and access to the GAMGEE repository:
+
+    sudo bash scripts/install-control-tower.sh
+    sudo bash scripts/run-control-tower.sh
+
+Open the local workspace at http://127.0.0.1:8091. The API token is generated in control-tower/.tower-token with restrictive file permissions. Paste it into the UI. The server binds to loopback by default.
+
+The API also exposes an OpenAPI document at http://127.0.0.1:8091/docs and a liveness check at http://127.0.0.1:8091/healthz.
+
+### Safety and execution
+
+- Planning is read-only and resolves profile dependencies automatically.
+- Applying a plan requires a valid bearer token, a matching plan hash, explicit approval, successful host preflight and GAMGEE_TOWER_ALLOW_APPLY=true.
+- The runner executes only Ansible playbooks stored under automation/ansible. It does not accept shell commands from API callers.
+- The Control Tower host process is privileged because selected playbooks manage host infrastructure. Keep the API on loopback or behind a trusted authenticated TLS gateway.
+- Failed jobs are recorded for inspection. The first release does not automatically destroy shared infrastructure or persistent data as a rollback strategy.
+
+See [Control Tower engineering guide](docs/control-tower-engineering.md) for API details, implementation boundaries, sizing notes and recovery guidance.
+
+### Control Tower tests
+
+    make tower-test
+
+The CI workflow runs the Control Tower, AI Agent and AI Factory unit tests and performs Ansible playbook syntax checks.
