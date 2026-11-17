@@ -216,8 +216,8 @@ An installation job is created only after a valid plan, a matching plan hash, se
 
 In the Workspaces section, provide a lowercase name and owner email. GAMGEE creates a Capsule Tenant with:
 
-- <workspace>-production namespace.
-- <workspace>-staging namespace.
+- Production namespace: &lt;workspace&gt;-production.
+- Staging namespace: &lt;workspace&gt;-staging.
 - Default CPU, memory, pod, service and PVC quotas.
 - Tenant metadata labels.
 
