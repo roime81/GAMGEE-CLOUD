@@ -15,6 +15,78 @@ The underlying platform uses open-source infrastructure, but GAMGEE owns the use
 
 > **Release status: early engineering preview.** The repository contains a working installation Control Tower, workspace and stateless application APIs, a first native WebAssembly HTTP Function resource using SpinKube and KEDA, a K3s worker join path, an existing AI Factory and optional infrastructure profiles. This is not yet a production-ready or highly available cloud, a complete multi-trigger FaaS platform, a full VM cloud, or a certified security product. The capability matrix below is explicit about what works and what remains planned.
 
+## Contents
+
+- [1. Product philosophy](#1-product-philosophy)
+  - [What makes GAMGEE different](#what-makes-gamgee-different)
+  - [The everyday operating model](#the-everyday-operating-model)
+  - [What GAMGEE is not](#what-gamgee-is-not)
+- [2. The GAMGEE mental model](#2-the-gamgee-mental-model)
+  - [One cloud, one control surface](#one-cloud-one-control-surface)
+- [3. Quick start: install GAMGEE on one VM](#3-quick-start-install-gamgee-on-one-vm)
+  - [Supported host](#supported-host)
+  - [Installation](#installation)
+  - [Remote browser access](#remote-browser-access)
+  - [Deployment topologies and network plan](#deployment-topologies-and-network-plan)
+    - [A. One VM](#a-one-vm--single-node-core-cloud)
+    - [B. Multiple VMs](#b-multiple-vms--one-k3s-control-plane-plus-worker-vms)
+    - [C. AWS EKS](#c-aws--amazon-eks-managed-kubernetes-planned-integration)
+    - [D. Azure AKS](#d-azure--azure-kubernetes-service-aks-managed-kubernetes-planned-integration)
+    - [Service endpoint and IP/port inventory](#service-endpoint-and-ipport-inventory)
+  - [Manual Control Tower installation](#manual-control-tower-installation)
+- [4. Guided onboarding](#4-guided-onboarding)
+  - [Step 1 — Create your cloud](#step-1--create-your-cloud)
+  - [Step 2 — Create a workspace](#step-2--create-a-workspace)
+  - [Step 3 — Launch an application](#step-3--launch-an-application)
+  - [Step 4 — Operate the application](#step-4--operate-the-application)
+- [5. Grow from one machine to multiple compute nodes](#5-grow-from-one-machine-to-multiple-compute-nodes)
+  - [On the control-plane machine](#on-the-control-plane-machine)
+  - [On the worker machine](#on-the-worker-machine)
+  - [Network requirements](#network-requirements)
+  - [Important scaling boundary](#important-scaling-boundary)
+- [6. Architecture and implementation](#6-architecture-and-implementation)
+  - [GAMGEE high-level architecture](#gamgee-high-level-architecture)
+  - [Current deployment topology](#current-deployment-topology)
+  - [Repository layout](#repository-layout)
+  - [Internal installation capabilities](#internal-installation-capabilities)
+  - [Why Kubernetes is not the GAMGEE product](#why-kubernetes-is-not-the-gamgee-product)
+  - [AI architecture](#ai-architecture)
+- [7. Control Tower API](#7-control-tower-api)
+  - [Health and capabilities](#health-and-capabilities)
+  - [Installation plans and jobs](#installation-plans-and-jobs)
+  - [Workspaces](#workspaces)
+  - [Native Functions](#native-functions)
+  - [Example API calls](#example-api-calls)
+- [7.1 GAMGEE Resource Engine](#71-gamgee-resource-engine)
+- [8. Security model and current security gaps](#8-security-model-and-current-security-gaps)
+  - [Controls currently present](#controls-currently-present)
+  - [Important limitations — read before production use](#important-limitations--read-before-production-use)
+- [9. AI Factory](#9-ai-factory)
+  - [AI safety direction](#ai-safety-direction)
+- [10. Operational procedures](#10-operational-procedures)
+  - [Check service state](#check-service-state)
+  - [Restart the Control Tower](#restart-the-control-tower)
+  - [Inspect a workload](#inspect-a-workload)
+  - [Update an application](#update-an-application)
+  - [Stop versus delete](#stop-versus-delete)
+  - [Back up the Control Tower database](#back-up-the-control-tower-database)
+  - [Teardown warning](#teardown-warning)
+- [11. Development and tests](#11-development-and-tests)
+  - [Requirements](#requirements)
+  - [Install dependencies](#install-dependencies)
+  - [Run tests](#run-tests)
+  - [Run Control Tower manually in development](#run-control-tower-manually-in-development)
+  - [Contributing principles](#contributing-principles)
+- [12. Roadmap](#12-roadmap)
+  - [Foundation](#foundation)
+  - [Unified GAMGEE resource control plane](#unified-gamgee-resource-control-plane)
+  - [Native cloud experience](#native-cloud-experience)
+  - [Scale, resilience and enterprise controls](#scale-resilience-and-enterprise-controls)
+- [13. Known limitations at a glance](#13-known-limitations-at-a-glance)
+- [14. Project direction](#14-project-direction)
+
+---
+
 ---
 
 ## 1. Product philosophy
@@ -308,21 +380,100 @@ The intended integration pattern is:
 
 Use the actual AKS API FQDN, private DNS zone, VNet/subnet CIDRs, NSG rules and ingress load-balancer IP/DNS from the Azure deployment. These values are environment-specific; do not assume a fixed AKS API IP. The current GAMGEE release has no AKS onboarding command or validated AKS driver.
 
-#### Port and exposure summary
+#### Service endpoint and IP/port inventory
 
-| Port | Protocol | Used by | Exposure guidance |
-| --- | --- | --- | --- |
-| `22` | TCP | SSH administration / tunnel | Admin or bastion source ranges only. |
-| `53` | UDP/TCP | DNS | To approved resolvers; not a public inbound service on GAMGEE nodes. |
-| `80` | TCP | HTTP application ingress, if enabled | Public/client-facing only when intentionally publishing an HTTP route. |
-| `123` | UDP | NTP | To approved time sources. |
-| `443` | TCP | HTTPS, registries, cloud Kubernetes API endpoints | Egress to approved destinations; ingress only at an intended HTTPS load balancer. |
-| `6443` | TCP | K3s API server | Private cluster traffic only; not EKS/AKS API port. |
-| `8091` | TCP | GAMGEE Control Tower | Bound to `127.0.0.1`; reach remotely through SSH tunnel. |
-| `8472` | UDP | K3s Flannel VXLAN | Node-to-node private traffic only when using the default Flannel VXLAN backend. |
-| `10250` | TCP | Kubernetes kubelet API | Restrict to control-plane / trusted cluster-node sources. |
+This is the service-level network register for the current repository configuration. It lists the listener, address model and exposure for each configured service. The IPs shown as examples are placeholders, not reserved addresses. Docker Compose service names are resolvable only on the Compose network; Kubernetes ClusterIP addresses are allocated dynamically by the cluster. GAMGEE does not assign fixed IPs to individual pods.
 
-**IP address and firewall rules are deployment-specific.** Use private IPs or private DNS for K3s control-plane/worker communication, reserve addresses where required, and permit only the source/destination pairs in the relevant topology. EKS and AKS API endpoints are cloud-managed DNS endpoints; use their actual endpoint names and the relevant security-group/NSG/network-policy configuration rather than inventing static IPs. Never expose the Control Tower, Kubernetes API, kubelet or CNI ports directly to the public Internet.
+**Address convention**
+
+| Deployment layer | Address / IP to use | How the address is obtained |
+| --- | --- | --- |
+| Host-bound service | `127.0.0.1` or the host's private IP | Explicit Compose/systemd host binding. Current Control Tower and Compose published ports bind to loopback. |
+| K3s node | e.g. `10.20.0.10` (control plane), `10.20.0.11` (worker) | Assign/reserve in your LAN/VPC/VNet DHCP or IPAM. |
+| Docker Compose service | Compose DNS name, e.g. `ai-factory`, `factory-postgres` | Docker's private Compose network DNS; do not use a container IP because it can change. |
+| Kubernetes service | `<service>.<namespace>.svc.cluster.local` | Stable cluster DNS name; ClusterIP is dynamically assigned. |
+| Public application endpoint | DNS name mapped to the ingress/load balancer | Configure DNS and the selected ingress/load-balancer; no public IP is created by the README or Control Tower automatically. |
+| AWS EKS / Azure AKS API | Cloud-generated API FQDN | Read from the EKS/AKS cluster configuration; private DNS and routing depend on the chosen cloud networking mode. |
+
+**GAMGEE host and Kubernetes services**
+
+| Service / component | Address / IP | Port / protocol | Network scope | Status / notes |
+| --- | --- | --- | --- | --- |
+| GAMGEE Control Tower UI + REST API | `127.0.0.1` on control-plane host | `8091/TCP` | Host loopback only | Installed by `scripts/install-gamgee.sh`; remote access through SSH tunnel. |
+| K3s Kubernetes API | `<control-plane-private-IP>` | `6443/TCP` | Private cluster/admin network | K3s server endpoint used by worker join script. |
+| Kubernetes kubelet API | `<node-private-IP>` on each node | `10250/TCP` | Control plane / trusted nodes | Restrict to cluster node sources. |
+| K3s Flannel VXLAN | Each node's private IP | `8472/UDP` | Node-to-node | Default K3s Flannel VXLAN data plane; change rules if CNI/backend changes. |
+| Kubernetes DNS (CoreDNS) | `kube-dns.kube-system.svc.cluster.local` (ClusterIP allocated dynamically) | `53/UDP`, `53/TCP` | Cluster-internal | Service discovery for pods and services. |
+| Traefik ingress (when installed/enabled) | Ingress Service ClusterIP or external load-balancer IP/DNS | `80/TCP`, `443/TCP` | Cluster ingress / client-facing | Publish only when application routes are intentionally exposed. |
+| GAMGEE Application Service | `<app-service>.<workspace>-production.svc.cluster.local` | Application's declared container/service port | Cluster-internal by default | Port is supplied with the application resource; no fixed global application port. |
+| GAMGEE Function proxy | `<function-proxy>.<workspace>-production.svc.cluster.local` | `8080/TCP` | Cluster-internal | Routes through KEDA HTTP interceptor for request-aware scaling. |
+| KEDA HTTP interceptor proxy | `keda-add-ons-http-interceptor-proxy.keda.svc.cluster.local` | `8080/TCP` | Cluster-internal | Function request path; not a public listener by itself. |
+| KEDA HTTP external scaler | `keda-add-ons-http-external-scaler.keda.svc.cluster.local` | `9090/TCP` | Cluster-internal | Used by KEDA ScaledObject external-push scaler. |
+| KEDA operator / metrics / admission components | Kubernetes Service DNS in namespace `keda` | Chart-managed ports | Cluster-internal | Exact service ports are Helm-chart version/configuration dependent; inspect `kubectl get svc -n keda`. |
+| Spin Operator and Runtime Class Manager | Kubernetes Service DNS in their namespaces | Chart/webhook-managed ports | Cluster-internal | No fixed service IP; inspect `kubectl get svc -n spin-operator -o wide` and `kubectl get svc -n runtime-class-manager -o wide`. |
+| Capsule tenant controller | Kubernetes Service DNS in its installed namespace | Controller/chart-managed ports | Cluster-internal | Workspace/Tenant API is served through Kubernetes API; no separate GAMGEE public listener. |
+| Kyverno admission controller (optional) | Kubernetes Service DNS in namespace `kyverno` | Admission webhook `443/TCP` (service port) | Cluster-internal API-server-to-webhook path | Optional Enterprise Security profile; service IP is dynamically allocated. |
+| Incus daemon (optional Private IaaS foundation) | Host-local Unix socket by default | Unix socket; no TCP port opened by default | Host-local | Incus API is not exposed on a network listener by this installation playbook. |
+
+**Docker Compose platform and AI Factory services**
+
+The following ports are the service/container ports from the repository's Compose definitions and standard image listeners. Only the entries explicitly published in Compose are reachable through a host port, and those published ports bind to `127.0.0.1`.
+
+| Service | Compose DNS / address | Container port / protocol | Host binding | Network scope / notes |
+| --- | --- | --- | --- | --- |
+| Authentik Server (HTTP) | `authentik-server` | `9000/TCP` | `127.0.0.1:9000` | Localhost-published; Authentik web/API HTTP. |
+| Authentik Server (HTTPS) | `authentik-server` | `9443/TCP` | `127.0.0.1:9443` | Localhost-published; Authentik HTTPS. |
+| Authentik Worker | `authentik-worker` | No inbound listener required by this Compose definition | None | Background worker; connects to PostgreSQL and Redis internally. |
+| Authentik PostgreSQL | `authentik-postgresql` | `5432/TCP` | None | Compose-internal database; persistent named volume. |
+| Authentik Redis | `authentik-redis` | `6379/TCP` | None | Compose-internal cache/queue; persistent named volume. |
+| VictoriaMetrics (Compose local metrics) | `victoria-metrics` | `8428/TCP` | `127.0.0.1:8428` | Localhost-published; 30-day retention in the current Compose file. |
+| AI Factory API | `ai-factory` | `8090/TCP` | `127.0.0.1:8090` | Localhost-published; FastAPI service. |
+| AI Factory integration worker | `integration-worker` | No inbound listener required by this Compose definition | None | Background NATS integration worker; calls AI Factory internally. |
+| NATS event bus (client) | `event-bus` | `4222/TCP` | None | Compose-internal event/messaging endpoint. |
+| NATS monitoring | `event-bus` | Not enabled in the current Compose command | None | No monitoring listener is configured in this repository definition. |
+| Qdrant vector database (HTTP) | `qdrant` | `6333/TCP` | None | Compose-internal vector API. |
+| Qdrant vector database (gRPC) | `qdrant` | `6334/TCP` | None | Compose-internal gRPC API. |
+| Factory PostgreSQL (agent checkpoint state) | `factory-postgres` | `5432/TCP` | None | Compose-internal database; persistent named volume. |
+| Ollama inference API | `ollama` | `11434/TCP` | None | Compose-internal model API; model weights stored in named volume. |
+| MCP servers | Configured by `MCP_SERVERS` allowlist | Per MCP server configuration | None defined by GAMGEE Compose | External/sidecar MCP endpoints are not instantiated by this Compose file; register their actual DNS/IP and port in the deployment-specific inventory. |
+| LLM provider endpoint | `LLM_BASE_URL` (default `http://ollama:11434/v1`) | Default `11434/TCP` | None | May point to an external provider or private inference endpoint; record the actual endpoint and egress rule when overridden. |
+
+**Cloud-managed Kubernetes API endpoints**
+
+| Platform | Address / IP | Port / protocol | Source-to-destination rule | Current GAMGEE support |
+| --- | --- | --- | --- | --- |
+| AWS EKS API | AWS-generated cluster API FQDN; private endpoint resolves within configured VPC/private DNS | `443/TCP` | Future GAMGEE integration host/security group to EKS endpoint | Planned only; no EKS driver/onboarding command. |
+| Azure AKS API | Azure-generated cluster API FQDN; private endpoint resolves through configured VNet/private DNS | `443/TCP` | Future GAMGEE integration host/subnet to AKS endpoint | Planned only; no AKS driver/onboarding command. |
+
+**How to obtain the actual allocated service IPs after installation**
+
+Use the commands below on the relevant host. They return the real addresses allocated in your environment; do not copy example IPs from this README into production firewall rules.
+
+    # Host listeners
+    sudo ss -lntup
+
+    # Docker Compose service names, published ports and current containers
+    docker compose ps
+    docker compose -f docker-compose.yml -f docker-compose.ai-factory.yml ps
+
+    # Kubernetes services and allocated ClusterIP / external IP
+    kubectl get svc -A -o wide
+
+    # Kubernetes nodes and their private IPs
+    kubectl get nodes -o wide
+
+    # Ingress endpoints
+    kubectl get ingress -A
+    kubectl get svc -n kube-system -o wide
+
+    # Function Cloud service endpoints
+    kubectl get svc -n keda -o wide
+    kubectl get svc -n spin-operator -o wide
+
+    # Incus local socket (if Private IaaS is installed)
+    sudo incus info
+
+For each environment, record the returned private IP/FQDN in the firewall/NSG/security-group change request. A pod IP or dynamically allocated ClusterIP is not a stable endpoint contract; use Kubernetes Service DNS names for application-to-application communication.
 
 ---
 
