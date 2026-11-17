@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +43,7 @@ def _run_playbook(playbook: str, timeout: int) -> tuple[int, str]:
     return result.returncode, (result.stdout or "")[-16000:]
 
 
-_execution_lock = __import__("threading").Lock()
+_execution_lock = threading.Lock()
 
 
 def execute_job(job_id: str, plan: dict[str, Any]) -> None:
