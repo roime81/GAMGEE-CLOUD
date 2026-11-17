@@ -40,18 +40,22 @@ class KubernetesFunctionDriverTests(unittest.TestCase):
 
         self.assertEqual(
             [item["kind"] for item in objects],
-            ["SpinApp", "InterceptorRoute", "Service", "ScaledObject"],
+            ["ServiceAccount", "SpinApp", "InterceptorRoute", "Service", "ScaledObject"],
         )
+        service_account = by_kind["ServiceAccount"]
+        self.assertFalse(service_account["automountServiceAccountToken"])
         spin = by_kind["SpinApp"]
         self.assertEqual(spin["apiVersion"], "core.spinkube.dev/v1alpha1")
         self.assertEqual(spin["spec"]["executor"], "containerd-shim-spin")
         self.assertTrue(spin["spec"]["enableAutoscaling"])
+        self.assertEqual(spin["spec"]["serviceAccountName"], spin["metadata"]["name"])
         self.assertEqual(spin["spec"]["image"], "ghcr.io/acme/thumbnail:v1.2.0")
 
         route = by_kind["InterceptorRoute"]
         self.assertEqual(route["apiVersion"], "http.keda.sh/v1beta1")
         self.assertEqual(route["spec"]["target"]["port"], 80)
         self.assertEqual(route["spec"]["rules"][0]["paths"], [{"value": "/resize"}])
+        self.assertEqual(route["spec"]["coldStart"]["maxPendingRequests"], 100)
 
         scaled = by_kind["ScaledObject"]
         self.assertEqual(scaled["spec"]["minReplicaCount"], 0)
@@ -99,7 +103,7 @@ class KubernetesFunctionDriverTests(unittest.TestCase):
 
         self.assertEqual(observed["state"], "progressing")
         kinds = [call.args[0]["kind"] for call in apply_mock.call_args_list]
-        self.assertEqual(kinds, ["SpinApp", "InterceptorRoute", "Service", "ScaledObject"])
+        self.assertEqual(kinds, ["ServiceAccount", "SpinApp", "InterceptorRoute", "Service", "ScaledObject"])
 
     @patch("tower.drivers.kubernetes_function.apply_object")
     @patch("tower.drivers.kubernetes_function.get_json")
@@ -126,7 +130,7 @@ class KubernetesFunctionDriverTests(unittest.TestCase):
     @patch("tower.drivers.kubernetes_function.run_kubectl")
     @patch("tower.drivers.kubernetes_function.get_json")
     def test_delete_waits_for_owned_custom_resources_to_disappear(self, get_json_mock, run_mock):
-        original = sample_resource()
+        original = sample_resource(public=True)
         resource = dict(original, desired={"deleted": True})
         key = function_resource_name("acme", "thumbnail", resource["id"])
         proxy = f"{key}-proxy"
@@ -148,6 +152,7 @@ class KubernetesFunctionDriverTests(unittest.TestCase):
                 return {"metadata": {"labels": {"gamgee.cloud/tenant": "acme"}}}
             mapping = {
                 ("ingress", key): f"ingress/{key}",
+                ("serviceaccount", key): f"serviceaccount/{key}",
                 ("spinapps.core.spinkube.dev", key): f"spinapps.core.spinkube.dev/{key}",
                 ("interceptorroutes.http.keda.sh", key): f"interceptorroutes.http.keda.sh/{key}",
                 ("scaledobjects.keda.sh", key): f"scaledobjects.keda.sh/{key}",
