@@ -14,6 +14,7 @@ class ResourceApiRegistrationTests(unittest.TestCase):
             ("POST", "/v1/resources/applications"),
             ("POST", "/v1/resources/functions"),
             ("GET", "/v1/tower/workspaces/{workspace}/functions"),
+            ("DELETE", "/v1/tower/workspaces/{workspace}/functions/{function_name}"),
             ("GET", "/v1/resources"),
             ("GET", "/v1/resources/{resource_id}"),
             ("GET", "/v1/resources/{resource_id}/operations"),
